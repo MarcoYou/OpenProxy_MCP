@@ -30,10 +30,11 @@ open_proxy_mcp/       # 메인 패키지
 - 입력값(날짜 형식 등) 검증 처리
 - 단일 파일 모놀리스 지양, 모듈 분리 유지
 
-## 참고 프로젝트
-- [dart-mcp](https://github.com/2geonhyup/dart-mcp) — DART 재무제표 MCP 서버
-  - 참고: FastMCP 데코레이터 패턴, OpenDART API 호출 구조, XBRL 파싱, 인코딩 폴백
-  - 우리와 다른 점: 정기공시(pblntf_ty=A)만 지원, 주주총회 소집공고 없음, 단일 파일 구조, 캐싱/테스트 없음
+## 참고 프로젝트 (상세 → references.md)
+- **dart-mcp** — DART 재무제표 MCP. FastMCP 패턴/OpenDART 호출 구조 참고. 단일파일/캐싱없음은 개선 대상.
+- **Kensho (S&P Global)** — LLM 최적화 API 설계, 도메인별 tool 분리, dual transport(stdio+SSE) 참고.
+- **FactSet** — 엔터프라이즈 MCP 거버넌스 패턴(Central Registry, Proxied Access), 데이터셋별 tool 구조 참고.
+- 공통 교훈: raw API 그대로 노출하지 말고 LLM이 쓰기 쉽게 구조화, 도메인별 tool 분리, 캐싱 필수
 
 ## 주요 커맨드
 ```bash
