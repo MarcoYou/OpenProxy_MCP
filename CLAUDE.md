@@ -40,6 +40,7 @@ open_proxy_mcp/       # 메인 패키지
 - 새로운 개념이 나오면 설명 먼저, 코드 나중
 - DEVLOG.md에 날짜별 작업 내역을 지속적으로 기록 (뭘 했는지, 다음 단계는 뭔지)
 - 30분마다 자동으로 commit + push (유저가 별도 지시하지 않아도)
+- homework.md를 확인하고 대화 시작 시 미완료 항목을 유저에게 리마인드. 완료된 항목은 제거.
 
 ## 참고 프로젝트 (상세 → references.md)
 - **dart-mcp** — DART 재무제표 MCP. FastMCP 패턴/OpenDART 호출 구조 참고. 단일파일/캐싱없음은 개선 대상.
