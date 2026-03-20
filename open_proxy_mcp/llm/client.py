@@ -69,12 +69,14 @@ async def extract_agenda_with_llm(zone_text: str, provider: str = "claude") -> l
 async def _call_claude(user_msg: str) -> str:
     """Anthropic Claude Sonnet 호출"""
     import anthropic
+    import httpx
 
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         raise ValueError("ANTHROPIC_API_KEY가 설정되지 않았습니다")
 
-    client = anthropic.AsyncAnthropic(api_key=api_key)
+    http_client = httpx.AsyncClient(verify=False)
+    client = anthropic.AsyncAnthropic(api_key=api_key, http_client=http_client)
     response = await client.messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=2000,
@@ -87,12 +89,14 @@ async def _call_claude(user_msg: str) -> str:
 async def _call_openai(user_msg: str) -> str:
     """OpenAI GPT 호출"""
     import openai
+    import httpx
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("OPENAI_API_KEY가 설정되지 않았습니다")
 
-    client = openai.AsyncOpenAI(api_key=api_key)
+    http_client = httpx.AsyncClient(verify=False)
+    client = openai.AsyncOpenAI(api_key=api_key, http_client=http_client)
     response = await client.chat.completions.create(
         model="gpt-4o-mini",
         max_tokens=2000,
