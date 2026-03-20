@@ -28,6 +28,18 @@ async def _get_document_cached(rcept_no: str) -> dict:
     if len(_doc_cache) >= _MAX_CACHE:
         _doc_cache.pop(next(iter(_doc_cache)))
     _doc_cache[rcept_no] = doc
+
+    # 이미지 기반 공고 감지 — 소집공고 본문이 이미지에만 있는 경우
+    images = doc.get("images", [])
+    notice_images = [img for img in images if any(
+        kw in img for kw in ["소집", "통지", "주총", "공고"]
+    )]
+    if notice_images:
+        logger.warning(
+            f"[IMAGE_NOTICE] 소집공고 본문이 이미지에 포함된 것으로 추정: "
+            f"{rcept_no} | images={notice_images} — 텍스트 파싱 결과가 불완전할 수 있음"
+        )
+
     return doc
 
 
