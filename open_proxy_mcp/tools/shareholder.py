@@ -1,5 +1,6 @@
 """주주총회 소집공고 관련 MCP tools"""
 
+import json
 import logging
 from datetime import datetime
 from open_proxy_mcp.dart.client import DartClient
@@ -132,6 +133,70 @@ def _format_meeting_info(info: dict) -> str:
     return "\n".join(lines)
 
 
+# ── JSON 빌더 ──
+
+def _build_agenda_json(
+    rcept_no: str,
+    agenda_items: list[dict],
+    meeting_info: dict,
+    corp_info: dict | None = None,
+    parse_method: str = "regex",
+) -> dict:
+    """파서 결과를 프론트엔드용 JSON 구조로 변환
+
+    agendaId = rceptNo + agendaId 로 유일 식별 가능.
+    향후 enrichment(classification, summary 등)는 agendaId로 join.
+    """
+    def _build_agenda_node(item: dict, parent_id: str | None = None) -> dict:
+        aid = item["number"].replace("제", "").replace("호", "")
+        depth = "root" if parent_id is None else ("sub" if "-" in aid and aid.count("-") == 1 else "subsub")
+        node = {
+            "agendaId": aid,
+            "number": item["number"],
+            "title": item["title"],
+            "depth": depth,
+            "parentId": parent_id,
+            "source": item.get("source"),
+            "conditional": item.get("conditional"),
+            "children": [],
+        }
+        for child in item.get("children", []):
+            node["children"].append(_build_agenda_node(child, parent_id=aid))
+        return node
+
+    agendas = [_build_agenda_node(item) for item in agenda_items]
+
+    return {
+        "schemaVersion": "v1",
+        "rceptNo": rcept_no,
+        "meetingInfo": {
+            "corpName": corp_info.get("corp_name") if corp_info else None,
+            "stockCode": corp_info.get("stock_code") if corp_info else None,
+            "corpCode": corp_info.get("corp_code") if corp_info else None,
+            "meetingType": meeting_info.get("meeting_type"),
+            "fiscalTerm": meeting_info.get("meeting_term"),
+            "isCorrection": meeting_info.get("is_correction", False),
+            "datetime": meeting_info.get("datetime"),
+            "location": meeting_info.get("location"),
+            "reportItems": meeting_info.get("report_items", []),
+        },
+        "agendas": agendas,
+        "parseMeta": {
+            "method": parse_method,
+            "valid": validate_agenda_result(agenda_items),
+            "totalCount": sum(1 for _ in _flatten_agendas(agendas)),
+            "rootCount": len(agendas),
+        },
+    }
+
+
+def _flatten_agendas(agendas: list[dict]):
+    """트리를 플랫하게 순회 (카운팅용)"""
+    for a in agendas:
+        yield a
+        yield from _flatten_agendas(a.get("children", []))
+
+
 # ── Tool 등록 ──
 
 def register_tools(mcp):
@@ -222,6 +287,7 @@ def register_tools(mcp):
     async def get_meeting_agenda(
         rcept_no: str,
         use_llm: bool = False,
+        format: str = "md",
     ) -> str:
         """주주총회 소집공고에서 의안(안건) 목록을 구조화하여 반환합니다.
 
@@ -231,10 +297,12 @@ def register_tools(mcp):
         Args:
             rcept_no: 접수번호 (예: 20260225000123)
             use_llm: True면 파싱 실패/의심 시 LLM fallback 사용 (기본: False)
+            format: 반환 형식. "md" (마크다운, 기본) 또는 "json" (프론트엔드용)
         """
         doc = await _get_document_cached(rcept_no)
         text = doc["text"]
         agenda = parse_agenda_items(text)
+        parse_method = "regex"
 
         if not validate_agenda_result(agenda) and use_llm:
             import re
@@ -248,10 +316,16 @@ def register_tools(mcp):
             logger.warning(f"[SOFT FAIL] 정규식 파싱 의심 — LLM fallback 시도: {rcept_no}")
             zone_clean = re.sub(r'\n+', ' ', zone)
             agenda = await extract_agenda_with_llm(zone_clean)
+            parse_method = "llm"
 
             if not validate_agenda_result(agenda):
                 logger.error(f"[HARD FAIL] LLM fallback도 실패: {rcept_no}")
                 return "안건을 파싱할 수 없습니다. (정규식 + LLM 모두 실패)"
+
+        if format == "json":
+            meeting_info = parse_meeting_info(text)
+            result = _build_agenda_json(rcept_no, agenda, meeting_info, parse_method=parse_method)
+            return json.dumps(result, ensure_ascii=False, indent=2)
 
         return _format_agenda_tree(agenda)
 
