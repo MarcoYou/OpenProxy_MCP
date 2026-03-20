@@ -98,8 +98,8 @@ async def _call_openai(user_msg: str) -> str:
     http_client = httpx.AsyncClient(verify=False)
     client = openai.AsyncOpenAI(api_key=api_key, http_client=http_client)
     response = await client.chat.completions.create(
-        model="gpt-4o-mini",
-        max_tokens=2000,
+        model="gpt-5.4-mini",
+        max_completion_tokens=2000,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
