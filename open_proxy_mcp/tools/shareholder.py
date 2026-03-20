@@ -221,6 +221,7 @@ def register_tools(mcp):
     @mcp.tool()
     async def get_meeting_agenda(
         rcept_no: str,
+        use_llm: bool = False,
     ) -> str:
         """주주총회 소집공고에서 의안(안건) 목록을 구조화하여 반환합니다.
 
@@ -229,28 +230,26 @@ def register_tools(mcp):
 
         Args:
             rcept_no: 접수번호 (예: 20260225000123)
+            use_llm: True면 파싱 실패/의심 시 LLM fallback 사용 (기본: False)
         """
         doc = await _get_document_cached(rcept_no)
         text = doc["text"]
         agenda = parse_agenda_items(text)
 
-        if not validate_agenda_result(agenda):
+        if not validate_agenda_result(agenda) and use_llm:
             import re
             section = _extract_notice_section(text)
             zone = _extract_agenda_zone(section) if section else None
 
             if not zone:
-                # hard fail: 문서에서 안건 영역을 찾을 수 없음
                 logger.error(f"[HARD FAIL] section/zone 추출 실패: {rcept_no}")
                 return "안건을 파싱할 수 없습니다. (문서에서 안건 영역을 찾을 수 없음)"
 
-            # soft fail: 정규식 의심 → LLM fallback
             logger.warning(f"[SOFT FAIL] 정규식 파싱 의심 — LLM fallback 시도: {rcept_no}")
             zone_clean = re.sub(r'\n+', ' ', zone)
             agenda = await extract_agenda_with_llm(zone_clean)
 
             if not validate_agenda_result(agenda):
-                # soft fail → LLM도 실패 → hard fail로 전환
                 logger.error(f"[HARD FAIL] LLM fallback도 실패: {rcept_no}")
                 return "안건을 파싱할 수 없습니다. (정규식 + LLM 모두 실패)"
 
