@@ -28,18 +28,25 @@ logger = logging.getLogger(__name__)
 # ── 정규식 ──
 
 # 안건 번호 패턴: 제N호, 제N-M호, 제N-M-K호
-# 표준: 제N호 의안: 제목
+# 표준 (콜론 있음): 제N호 의안: 제목 / 제N호 안건: 제목
 AGENDA_RE = re.compile(
     r'제\s*(\d+)\s*(?:-\s*(\d+))?\s*(?:-\s*(\d+))?\s*호'
-    r'\s*(?:의안)?\s*[:：]\s*'
-    r'(.+?)(?=\s*(?:□?\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|-\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|\d+\)\s*제\s*\d+|\(제\s*\d+|※|$))'
+    r'\s*(?:의안|안건)?\s*[:：]\s*'
+    r'(.+?)(?=\s*(?:[□◎●○▶]?\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|-\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|\d+\)\s*제\s*\d+|\(제\s*\d+|※|$))'
+)
+
+# 콜론 없음: 제N호 의안 제목 (의안 키워드 필수, lookahead 더 엄격)
+AGENDA_NO_COLON_RE = re.compile(
+    r'제\s*(\d+)\s*(?:-\s*(\d+))?\s*(?:-\s*(\d+))?\s*호'
+    r'\s*의안\s+'
+    r'(.+?)(?=\s*(?:[□◎●○▶]?\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|-\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|\d+\)\s*제\s*\d+|\(제\s*\d+|※|$))'
 )
 
 # 괄호형: (제N-M-K호) 제목 (콜론 없음)
 AGENDA_PAREN_RE = re.compile(
     r'\(제\s*(\d+)\s*(?:-\s*(\d+))?\s*(?:-\s*(\d+))?\s*호\)'
     r'\s*'
-    r'(.+?)(?=\s*(?:\(제\s*\d+|□?\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|-\s*제\s*\d+|※|$))'
+    r'(.+?)(?=\s*(?:\(제\s*\d+|[□◎●○▶]?\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|-\s*제\s*\d+|※|$))'
 )
 
 # 조건부 의안 ※
@@ -96,12 +103,19 @@ def parse_agenda_items(text: str, html: str = "") -> list[dict]:
 
     conditionals = _extract_conditionals(zone)
 
-    # 두 패턴(표준 + 괄호형)의 매치를 위치 순으로 합침
+    # 세 패턴(표준 + 콜론없음 + 괄호형)의 매치를 위치 순으로 합침
     matches = []
+    seen_positions = set()
     for m in AGENDA_RE.finditer(zone):
         matches.append((m.start(), m))
+        seen_positions.add(m.start())
+    for m in AGENDA_NO_COLON_RE.finditer(zone):
+        if m.start() not in seen_positions:
+            matches.append((m.start(), m))
+            seen_positions.add(m.start())
     for m in AGENDA_PAREN_RE.finditer(zone):
-        matches.append((m.start(), m))
+        if m.start() not in seen_positions:
+            matches.append((m.start(), m))
     matches.sort(key=lambda x: x[0])
 
     flat = []
@@ -185,7 +199,7 @@ def _extract_agenda_zone_html(html: str) -> str | None:
         if '주주총회' in title_text and '소집' in title_text and '공고' in title_text:
             parent = el.parent
             section_text = parent.get_text()
-            if re.search(r'일\s*시|장\s*소|회의\s*(?:의?\s*)?목적\s*사항|부의\s*안건', section_text):
+            if re.search(r'일\s*시|장\s*소|회의\s*(?:의?\s*)?목적\s*사항|부의\s*(?:안건|사항)', section_text):
                 notice_section = parent
 
     if not notice_section:
@@ -207,7 +221,7 @@ def _extract_notice_section(text: str) -> str | None:
     section_start = None
     for m in re.finditer(r'주주총회\s*소집\s*공고', text):
         after = text[m.end():m.end()+500]
-        if re.search(r'일\s*시|장\s*소|회의\s*(?:의?\s*)?목적\s*사항|부의\s*안건', after):
+        if re.search(r'일\s*시|장\s*소|회의\s*(?:의?\s*)?목적\s*사항|부의\s*(?:안건|사항)', after):
             section_start = m.start()
 
     if section_start is None:
@@ -230,9 +244,10 @@ def _extract_agenda_zone(section: str) -> str | None:
     끝: 섹션 끝 (이미 대섹션 경계로 잘려 있음) 또는 세부 끝점
     """
     start_patterns = [
-        r'회의\s*(?:의?\s*)?목적\s*사항',
+        r'회의\s*(?:의?\s*)?(?:보고\s*)?목적\s*사항',
         r'결의\s*사항',
         r'부의\s*안건',
+        r'부의\s*사항',
         r'의결\s*사항',
     ]
     start_pos = None
