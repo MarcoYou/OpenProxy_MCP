@@ -334,8 +334,9 @@ def register_tools(mcp):
         """
         doc = await _get_document_cached(rcept_no)
         text = doc["text"]
-        agenda = parse_agenda_items(text)
-        parse_method = "regex"
+        html = doc.get("html", "")
+        agenda = parse_agenda_items(text, html=html)
+        parse_method = "bs4+regex" if html else "regex"
 
         if not validate_agenda_result(agenda) and use_llm:
             import re

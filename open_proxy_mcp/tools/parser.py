@@ -63,23 +63,33 @@ SECTION_END_PATTERNS = [
 
 # ── 안건 파싱 ──
 
-def parse_agenda_items(text: str) -> list[dict]:
+def parse_agenda_items(text: str, html: str = "") -> list[dict]:
     """'주주총회 소집공고' 섹션의 회의목적사항에서 안건 트리 추출
+
+    html이 제공되면 bs4로 섹션 경계를 찾고, 없으면 기존 regex 방식 사용.
 
     Returns:
         [{"number": "제1호", "level1": 1, "level2": None, "level3": None,
           "title": "...", "source": "이사회안"|"주주제안"|None,
           "conditional": "..."|None, "children": [...]}]
     """
-    section = _extract_notice_section(text)
-    if not section:
-        logger.warning("'주주총회 소집공고' 섹션을 찾을 수 없음")
-        return []
+    zone = None
 
-    zone = _extract_agenda_zone(section)
+    # 1) bs4 기반 추출 시도
+    if html:
+        zone = _extract_agenda_zone_html(html)
+
+    # 2) Fallback: 기존 plain text regex
     if not zone:
-        logger.warning("안건 영역(회의목적사항/결의사항/부의안건)을 찾을 수 없음")
-        return []
+        section = _extract_notice_section(text)
+        if not section:
+            logger.warning("'주주총회 소집공고' 섹션을 찾을 수 없음")
+            return []
+
+        zone = _extract_agenda_zone(section)
+        if not zone:
+            logger.warning("안건 영역(회의목적사항/결의사항/부의안건)을 찾을 수 없음")
+            return []
 
     # 줄바꿈을 공백으로 치환 — 제목이 여러 줄에 걸치는 케이스 처리
     zone = re.sub(r'\n+', ' ', zone)
@@ -152,6 +162,37 @@ def validate_agenda_result(items: list[dict]) -> bool:
         return False
 
     return True
+
+
+def _extract_agenda_zone_html(html: str) -> str | None:
+    """HTML에서 bs4로 소집공고 섹션의 안건 영역 텍스트를 추출
+
+    DART 문서 구조:
+      <section-1>
+        <title>주주총회 소집공고</title>
+        <p>... 일시, 장소, 회의목적사항 ... 제1호 ... 제2호 ...</p>
+        <p>... 전자투표, 의결권 ...</p>
+
+    bs4로 <section-1> 범위를 정확히 잡아서 _extract_agenda_zone에 넘김.
+    text 방식보다 섹션 경계가 정확하여 end_pattern 오발동 방지.
+    """
+    soup = BeautifulSoup(html, 'html.parser')
+
+    # '주주총회 소집공고' 섹션 찾기 — 마지막 매칭 선택 (정정 preamble 건너뜀)
+    notice_section = None
+    for el in soup.find_all('title'):
+        title_text = el.get_text().strip()
+        if '주주총회' in title_text and '소집' in title_text and '공고' in title_text:
+            parent = el.parent
+            section_text = parent.get_text()
+            if re.search(r'일\s*시|장\s*소|회의\s*(?:의?\s*)?목적\s*사항|부의\s*안건', section_text):
+                notice_section = parent
+
+    if not notice_section:
+        return None
+
+    section_text = notice_section.get_text()
+    return _extract_agenda_zone(section_text)
 
 
 def _extract_notice_section(text: str) -> str | None:
