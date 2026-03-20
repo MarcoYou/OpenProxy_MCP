@@ -316,7 +316,9 @@ def _clean_title(title: str) -> str:
     title = title.strip()
     title = re.sub(r'[□■○▶●①②③④⑤⑥⑦⑧⑨⑩]', '', title)  # 마커/기호/원문자 제거
     title = re.sub(r'[\s]*[ㆍ·\.\-]\s*$', '', title)
-    title = re.sub(r'\s*\d+\)\s*$', '', title)
+    # 후행 "N)" 제거 — 단, 열린 괄호가 앞에 있으면(괄호 안이면) 제거하지 않음
+    if re.search(r'\d+\)\s*$', title) and title.count('(') <= title.count(')') - 1:
+        title = re.sub(r'\s*\d+\)\s*$', '', title)
     title = re.sub(r'\s*\(\s*$', '', title)  # 끝에 매달린 여는 괄호 제거
     return title.strip()
 
