@@ -1,0 +1,10 @@
+[project]
+name = "open-proxy-mcp"
+version = "0.1.0"
+description = "DART 공시 데이터를 MCP 프로토콜로 제공하는 서버"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.6.0",
+    "httpx>=0.28.1",
+    "python-dotenv>=1.0.0",
+]

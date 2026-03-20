@@ -2,4 +2,4 @@
 
 from open_proxy_mcp.server import mcp
 
-mcp.run()
+mcp.run(transport='stdio')

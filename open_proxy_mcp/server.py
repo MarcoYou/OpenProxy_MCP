@@ -2,7 +2,7 @@
 
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("open-proxy-dart")
+mcp = FastMCP("open-proxy-mcp")
 
 # tool 등록 — 도메인별 모듈에서 import
 from open_proxy_mcp.tools.shareholder import register_tools
