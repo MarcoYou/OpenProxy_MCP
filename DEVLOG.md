@@ -79,30 +79,34 @@ get_meeting_agenda(rcept_no)
         │ agenda[]
         ▼
   validate_agenda_result()
+  (0건/중복/제목200자↑)
         │
-   ✅ True ──────────────────────┐
-        │ ❌ False               │
-        │ (0건/중복/제목200자↑)   │
-        ▼                        │
-  extract_notice_section()       │
-        │ section                │
-        ▼                        │
-  extract_agenda_zone()          │
-        │ zone (500~1500자)      │
-        ▼                        │
-  LLM fallback                   │
-  Claude Sonnet (→OpenAI)        │
-        │ agenda[]               │
-        ▼                        │
-  validate again                 │
-        │                        │
-   ✅ ──────────────┐            │
-        │ ❌        │            │
-        ▼           ▼            ▼
-  "파싱 불가"   format_agenda_tree()
-   + 로그            │
-                     ▼
-               마크다운 응답
+   ✅ True ───────────────────────────┐
+        │ ❌ False                    │
+        ▼                             │
+  extract_notice_section()            │
+  extract_agenda_zone()               │
+        │                             │
+   zone 없음 ──┐    zone 있음         │
+        │       │         │           │
+        ▼       │         ▼           │
+  [HARD FAIL]   │   [SOFT FAIL]      │
+  "안건 영역    │   LLM fallback     │
+   찾을 수 없음"│   (gpt-5.4-mini)   │
+                │         │           │
+                │    validate again   │
+                │         │           │
+                │    ✅ ─────────┐    │
+                │         │      │    │
+                │    ❌   │      │    │
+                │         ▼      ▼    ▼
+                │   [HARD FAIL]  format_agenda_tree()
+                │   "정규식+LLM       │
+                │    모두 실패"       ▼
+                │              마크다운 응답
+                │
+                ▼
+           로그 기록
 ```
 
 **구현 파일:**
