@@ -355,8 +355,12 @@ def _build_tree(flat_items: list[dict]) -> list[dict]:
 
 # ── 비안건 파싱 ──
 
-def parse_meeting_info(text: str) -> dict:
-    """소집공고 텍스트에서 비안건 정보를 추출"""
+def parse_meeting_info(text: str, html: str = "") -> dict:
+    """소집공고에서 비안건 정보를 추출
+
+    html이 제공되면 bs4로 소집공고 섹션을 정확히 잡아서 파싱.
+    없으면 기존 text regex 방식 사용.
+    """
     info = {
         "meeting_type": None,
         "meeting_term": None,
@@ -371,39 +375,46 @@ def parse_meeting_info(text: str) -> dict:
         "toc": [],
     }
 
-    # 정정공고 여부
+    # bs4로 소집공고 섹션 텍스트 추출 (범위가 정확)
+    section_text = None
+    if html:
+        section_text = _extract_notice_section_html(html)
+    if not section_text:
+        section_text = text  # fallback: 전체 텍스트
+
+    # 정정공고 여부 (전체 텍스트에서 확인)
     if re.search(r'정\s*정\s*신\s*고|기재\s*정정', text[:500]):
         info["is_correction"] = True
 
     # 정기/임시 구분
-    if re.search(r'임시\s*주주총회', text):
+    if re.search(r'임시\s*주주총회', section_text):
         info["meeting_type"] = "임시"
-    elif re.search(r'정기\s*주주총회|정기\)', text):
+    elif re.search(r'정기\s*주주총회|정기\)', section_text):
         info["meeting_type"] = "정기"
 
     # 기수 추출 (제N기)
-    m = re.search(r'(제\s*\d+\s*기)', text)
+    m = re.search(r'(제\s*\d+\s*기)', section_text)
     if m:
         info["meeting_term"] = re.sub(r'\s+', '', m.group(1))
 
     # 일시 추출
-    m = re.search(r'\d+\.\s*일\s*시\s*[:：]?\s*(.+?)(?=\s*\d+\.\s*장\s*소|\n\s*\d+\.\s|\n|$)', text)
+    m = re.search(r'\d+\.\s*일\s*시\s*[:：]?\s*(.+?)(?=\s*\d+\.\s*장\s*소|\n\s*\d+\.\s|\n|$)', section_text)
     if not m:
-        m = re.search(r'일\s*시\s*[:：]\s*(.+?)(?=\n|$)', text)
+        m = re.search(r'일\s*시\s*[:：]\s*(.+?)(?=\n|$)', section_text)
     if m:
         info["datetime"] = m.group(1).strip()
 
     # 장소 추출
-    m = re.search(r'\d+\.\s*장\s*소\s*[:：]?\s*(.+?)(?=\s*\d+\.\s*(?:회의|보고|전자|의결|경영)|\n\s*\d+\.\s|\n|$)', text)
+    m = re.search(r'\d+\.\s*장\s*소\s*[:：]?\s*(.+?)(?=\s*\d+\.\s*(?:회의|보고|전자|의결|경영)|\n\s*\d+\.\s|\n|$)', section_text)
     if not m:
-        m = re.search(r'장\s*소\s*[:：]\s*(.+?)(?=\n|$)', text)
+        m = re.search(r'장\s*소\s*[:：]\s*(.+?)(?=\n|$)', section_text)
     if m:
         info["location"] = m.group(1).strip()
 
     # 보고사항 추출
     report_m = re.search(
         r'보고\s*(?:사항|안건)\s*[:：]?\s*(.+?)(?=\n\s*[나②][\.\s]|결의|부의|의결|\n\n)',
-        text, re.DOTALL
+        section_text, re.DOTALL
     )
     if report_m:
         report_text = report_m.group(1)
@@ -412,21 +423,47 @@ def parse_meeting_info(text: str) -> dict:
                                 if _clean_report_item(i) and len(_clean_report_item(i)) > 2]
 
     # 전자투표 섹션
-    info["electronic_voting"] = _extract_section(text, r'\d+\.\s*전자\s*투표', limit=1500)
+    info["electronic_voting"] = _extract_section(section_text, r'\d+\.\s*전자\s*투표', limit=1500)
 
     # 의결권 행사 방법
-    info["proxy_voting"] = _extract_section(text, r'\d+\.\s*의결권\s*(?:행사|대리)', limit=1500)
+    info["proxy_voting"] = _extract_section(section_text, r'\d+\.\s*의결권\s*(?:행사|대리)', limit=1500)
 
     # 온라인 중계
-    info["online_broadcast"] = _extract_section(text, r'\d+\.\s*온라인\s*중계', limit=1000)
+    info["online_broadcast"] = _extract_section(section_text, r'\d+\.\s*온라인\s*중계', limit=1000)
 
     # 경영참고사항 비치
-    info["reference_materials"] = _extract_section(text, r'경영참고사항의?\s*비치', limit=500)
+    info["reference_materials"] = _extract_section(section_text, r'경영참고사항의?\s*비치', limit=500)
 
-    # 문서 목차
+    # 문서 목차 (전체 텍스트에서)
     info["toc"] = _extract_document_toc(text)
 
     return info
+
+
+def _extract_notice_section_html(html: str) -> str | None:
+    """HTML에서 bs4로 소집공고 섹션의 전체 텍스트를 추출
+
+    _extract_agenda_zone_html과 달리, 안건 영역이 아닌 섹션 전체 반환.
+    일시/장소/전자투표/의결권 등 비안건 정보가 이 범위 안에 있음.
+    """
+    soup = BeautifulSoup(html, _BS4_PARSER)
+
+    notice_section = None
+    for el in soup.find_all('title'):
+        title_text = el.get_text().strip()
+        if '주주총회' in title_text and '소집' in title_text and '공고' in title_text:
+            parent = el.parent
+            section_text = parent.get_text()
+            if re.search(r'일\s*시|장\s*소|회의\s*(?:의?\s*)?목적\s*사항|부의\s*(?:안건|사항)', section_text):
+                notice_section = parent
+
+    if not notice_section:
+        return None
+
+    text = notice_section.get_text()
+    # HTML get_text()의 연속 공백 정규화 (줄바꿈은 보존)
+    text = re.sub(r'[^\S\n]+', ' ', text)
+    return text
 
 
 # ── 유틸리티 ──

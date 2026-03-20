@@ -376,7 +376,7 @@ def register_tools(mcp):
             rcept_no: 접수번호 (예: 20260225000123)
         """
         doc = await _get_document_cached(rcept_no)
-        info = parse_meeting_info(doc["text"])
+        info = parse_meeting_info(doc["text"], html=doc.get("html", ""))
         return _format_meeting_info(info)
 
     @mcp.tool()
