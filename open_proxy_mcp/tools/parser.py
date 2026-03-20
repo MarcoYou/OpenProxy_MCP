@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 AGENDA_RE = re.compile(
     r'제\s*(\d+)\s*(?:-\s*(\d+))?\s*(?:-\s*(\d+))?\s*호'
     r'\s*(?:의안)?\s*[:：]\s*'
-    r'(.+?)(?=\s*(?:□?\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|-\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|\d+\)\s*제\s*\d+|※|\n|$))'
+    r'(.+?)(?=\s*(?:□?\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|-\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|\d+\)\s*제\s*\d+|※|$))'
 )
 
 # 조건부 의안 ※
@@ -48,10 +48,14 @@ def parse_agenda_items(text: str) -> list[dict]:
           "title": "...", "source": "이사회안"|"주주제안"|None,
           "conditional": "..."|None, "children": [...]}]
     """
+    text = _strip_correction_preamble(text)
     zone = _extract_agenda_zone(text)
     if not zone:
         logger.warning("안건 영역(회의목적사항/결의사항/부의안건)을 찾을 수 없음")
         return []
+
+    # 줄바꿈을 공백으로 치환 — 제목이 여러 줄에 걸치는 케이스 처리
+    zone = re.sub(r'\n+', ' ', zone)
 
     conditionals = _extract_conditionals(zone)
     flat = []
@@ -112,22 +116,26 @@ def _extract_agenda_zone(text: str) -> str | None:
     # 끝점: 안건 나열 직후의 다음 섹션
     # 줄바꿈 유무와 무관하게 잡기 위해 다양한 패턴 사용
     end_patterns = [
-        r'\n\d+\.\s*경영참고사항',
-        r'\n\d+\.\s*전자\s*투표',
-        r'\n\d+\.\s*전자\s*증권',
-        r'\n\d+\.\s*의결권\s*(?:행사|대리)',
-        r'\n\d+\.\s*주주총회\s*참석',
-        r'\n\d+\.\s*실질주주',
-        r'\n\d+\.\s*기\s*타\b',
-        r'\n\d+\.\s*배당금\s*지급',
-        r'\n\d+\.\s*제\d+기\s*(?:기말)?배당',
+        # "N. 섹션명" — 줄바꿈/공백 유무 무관
+        r'\d+\.\s*경영\s*참고\s*사항',
+        r'\d+\.\s*전자\s*투표',
+        r'\d+\.\s*전자\s*증권',
+        r'\d+\.\s*의결권\s*(?:행사|대리)',
+        r'\d+\.\s*주주총회\s*참석',
+        r'\d+\.\s*실질\s*주주',
+        r'\d+\.\s*기\s*타\b',
+        r'\d+\.\s*배당금\s*지급',
+        r'\d+\.\s*제\d+기\s*(?:기말)?배당',
+        # 특수문자로 시작하는 섹션 (■□○ 등)
+        r'[■□○●▶]\s*경영\s*참고\s*사항',
+        r'[■□○●▶]\s*전자\s*투표',
+        r'[■□○●▶]\s*의결권',
+        # 로마 숫자 섹션
         r'\nI\.\s',
         r'\nI\s*\.\s*사외이사',
-        # 줄바꿈 없이 이어지는 경우: "승인의 건 N. 경영참고사항"
-        r'승인의\s*건\s+\d+\.\s*경영참고사항',
-        r'승인의\s*건\s+\d+\.\s*전자\s*투표',
+        r'Ⅰ\.\s*사외이사',
     ]
-    end_pos = min(start_pos + 5000, len(text))
+    end_pos = len(text)
     for pat in end_patterns:
         em = re.search(pat, text[start_pos:])
         if em and start_pos + em.start() < end_pos:
@@ -247,6 +255,38 @@ def parse_meeting_info(text: str) -> dict:
 
 # ── 유틸리티 ──
 
+def _strip_correction_preamble(text: str) -> str:
+    """정정공고인 경우, 정정 전/후 비교 영역을 건너뛰고 정정 후 본문만 반환
+
+    정정공고 구조:
+      정 정 신 고 (보고)
+      3. 정정사항 (정정 전/후 테이블)
+        주1) 정정 전 ...
+        주2) 정정 후 ...
+        ...
+      [여기서부터 실제 정정 후 본문 = '주주총회 소집공고' 또는 'N. 회의목적사항']
+
+    마지막 '정정 후' 블록의 시작점을 찾아 그 이후만 반환.
+    """
+    if not re.search(r'정\s*정\s*신\s*고|기재\s*정정', text[:500]):
+        return text
+
+    # '주N) 정정 후' 패턴의 마지막 매치를 찾음
+    correction_markers = list(re.finditer(r'주\d+\)\s*정정\s*후', text))
+    if not correction_markers:
+        return text
+
+    last_marker = correction_markers[-1]
+    after = text[last_marker.start():]
+
+    # 정정 후 블록 뒤에 오는 실제 본문 시작점 ('주주총회소집공고' 또는 '주주총회 소집공고')
+    body_start = re.search(r'주주총회\s*소집\s*공고', after)
+    if body_start:
+        return after[body_start.start():]
+
+    return after
+
+
 def _extract_conditionals(text: str) -> dict[str, str]:
     """※ 조건부 의안 텍스트를 의안 번호별로 매핑"""
     result = {}
@@ -272,11 +312,12 @@ def _format_number(l1: int, l2: int | None, l3: int | None) -> str:
 
 
 def _clean_title(title: str) -> str:
-    """제목 정리: 후행 기호, 번호, □■○▶ 제거"""
+    """제목 정리: 후행 기호, 번호, 특수문자 제거"""
     title = title.strip()
-    title = re.sub(r'[□■○▶●]', '', title)  # 마커/기호 제거
+    title = re.sub(r'[□■○▶●①②③④⑤⑥⑦⑧⑨⑩]', '', title)  # 마커/기호/원문자 제거
     title = re.sub(r'[\s]*[ㆍ·\.\-]\s*$', '', title)
     title = re.sub(r'\s*\d+\)\s*$', '', title)
+    title = re.sub(r'\s*\(\s*$', '', title)  # 끝에 매달린 여는 괄호 제거
     return title.strip()
 
 
