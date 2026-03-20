@@ -20,13 +20,17 @@
 ### 안건 상세 파싱 (get_agenda_detail) ✓
 - [x] BeautifulSoup으로 HTML 직접 파싱 — 테이블은 마크다운 테이블, 텍스트는 텍스트
 - [x] KT&G 8개 안건 검증 통과
+- [x] 다기업 호환성 수정 (삼성전자/현대차 패턴, section-4 재귀 파싱)
+- [x] 6개 기업 cross-check 통과 (KT&G, 삼성전자, LG화학, NAVER, 현대차, SK이노베이션)
 
 ## 해야 할 일
 
-### OCR 파이프라인
-- [ ] 공시 본문 내 이미지(BSM, 확인서 등) OCR 처리 기능 추가
-- [ ] img2table + PaddleOCR 조합 검토
-- [ ] get_document()에서 이미지 파일명 분리 반환 구조 만들기
+### 이미지 인덱싱 + OCR 파이프라인
+- [ ] parse_agenda_details에서 이미지 메타데이터 인덱싱 (파일명, 위치, 카테고리)
+  - BSM → `{"type": "image", "category": "bsm"}`, 확인서 → 스킵
+- [ ] ZIP 내 이미지 바이너리 추출 (client.py)
+- [ ] Tesseract + EasyOCR 벤치마크 (KT&G BSM으로)
+- [ ] 별도 OCR tool → 결과를 agenda detail에 병합
 
 ### 기업 검색 개선
 - [ ] 영문 브랜드명(KT&G 등) → corp_code 매핑 지원 (별칭 또는 영문명 API)
@@ -38,7 +42,7 @@
 - [x] `제` 없는 비표준 하위안건 번호 패턴 대응 (lookahead 경계로 해결)
 - [x] 후보자 테이블 제목 분리 (테이블 헤더 경계로 해결)
 - [ ] Claude API (Anthropic) fallback 추가 (현재 OpenAI만 테스트 완료)
-- [ ] `get_agenda_detail` 다기업 검증 (현재 KT&G만 상세 확인)
 
-### feat/agenda-tree-bs4 브랜치 → main 머지
-- [ ] 최종 리뷰 후 main에 머지
+### get_agenda_detail 추가 검증/개선
+- [ ] 더 많은 기업으로 테스트 (20개+) — 패턴 변형 발견 시 수정
+- [ ] 안건 트리 ↔ 상세 불일치 케이스 분석 (NAVER 중복 등)
