@@ -23,11 +23,13 @@ logger = logging.getLogger(__name__)
 # ── 정규식 ──
 
 # 안건 번호 패턴: 제N호, 제N-M호, 제N-M-K호
-# lookahead: 다음 안건번호, ※, 번호), □, - 제, 줄바꿈
+# lookahead: 다음 안건번호, ※, □, - 제, 줄바꿈
+# \d+\)\s*제 는 "1) 제1호" 패턴 대응이지만, "2026.3.26)" 같은 날짜 오매치 방지를 위해
+# \d+\) 뒤에 \s*제\s*\d+ 까지 확인
 AGENDA_RE = re.compile(
     r'제\s*(\d+)\s*(?:-\s*(\d+))?\s*(?:-\s*(\d+))?\s*호'
     r'\s*(?:의안)?\s*[:：]\s*'
-    r'(.+?)(?=\s*(?:□?\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|-\s*제\s*\d+|\d+\)\s*제|※|\n|$))'
+    r'(.+?)(?=\s*(?:□?\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|-\s*제\s*\d+\s*(?:-\s*\d+)*\s*호|\d+\)\s*제\s*\d+|※|\n|$))'
 )
 
 # 조건부 의안 ※
@@ -107,18 +109,25 @@ def _extract_agenda_zone(text: str) -> str | None:
     if start_pos is None:
         return None
 
-    # 끝점: 안건 나열 이후의 다음 섹션
+    # 끝점: 안건 나열 직후의 다음 섹션
+    # 줄바꿈 유무와 무관하게 잡기 위해 다양한 패턴 사용
     end_patterns = [
         r'\n\d+\.\s*경영참고사항',
         r'\n\d+\.\s*전자\s*투표',
         r'\n\d+\.\s*전자\s*증권',
-        r'\n\d+\.\s*의결권\s*행사',
+        r'\n\d+\.\s*의결권\s*(?:행사|대리)',
         r'\n\d+\.\s*주주총회\s*참석',
         r'\n\d+\.\s*실질주주',
-        r'\n\d+\.\s*기\s*타',
+        r'\n\d+\.\s*기\s*타\b',
+        r'\n\d+\.\s*배당금\s*지급',
+        r'\n\d+\.\s*제\d+기\s*(?:기말)?배당',
         r'\nI\.\s',
+        r'\nI\s*\.\s*사외이사',
+        # 줄바꿈 없이 이어지는 경우: "승인의 건 N. 경영참고사항"
+        r'승인의\s*건\s+\d+\.\s*경영참고사항',
+        r'승인의\s*건\s+\d+\.\s*전자\s*투표',
     ]
-    end_pos = min(start_pos + 5000, len(text))  # 최대 5000자 제한 (안건 목차 영역)
+    end_pos = min(start_pos + 5000, len(text))
     for pat in end_patterns:
         em = re.search(pat, text[start_pos:])
         if em and start_pos + em.start() < end_pos:
@@ -263,9 +272,9 @@ def _format_number(l1: int, l2: int | None, l3: int | None) -> str:
 
 
 def _clean_title(title: str) -> str:
-    """제목 정리: 후행 기호, 번호, □ 제거"""
+    """제목 정리: 후행 기호, 번호, □■○▶ 제거"""
     title = title.strip()
-    title = re.sub(r'[□■]', '', title)  # □■ 마커 제거
+    title = re.sub(r'[□■○▶●]', '', title)  # 마커/기호 제거
     title = re.sub(r'[\s]*[ㆍ·\.\-]\s*$', '', title)
     title = re.sub(r'\s*\d+\)\s*$', '', title)
     return title.strip()
