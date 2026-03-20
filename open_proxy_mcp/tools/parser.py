@@ -121,6 +121,35 @@ def parse_agenda_items(text: str) -> list[dict]:
     return _build_tree(flat)
 
 
+def validate_agenda_result(items: list[dict]) -> bool:
+    """파싱 결과가 유효한지 검사. False면 LLM fallback 대상."""
+    if not items:
+        return False
+
+    # 같은 number 중복 (정정공고 잔류 등)
+    numbers = []
+    def collect(tree):
+        for item in tree:
+            numbers.append(item["number"])
+            collect(item.get("children", []))
+    collect(items)
+    if len(numbers) != len(set(numbers)):
+        return False
+
+    # 제목 200자 초과 (zone 텍스트 딸려옴)
+    def check_title(tree):
+        for item in tree:
+            if len(item.get("title", "")) > 200:
+                return False
+            if not check_title(item.get("children", [])):
+                return False
+        return True
+    if not check_title(items):
+        return False
+
+    return True
+
+
 def _extract_notice_section(text: str) -> str | None:
     """문서에서 '주주총회 소집공고' 본문 섹션만 추출
 

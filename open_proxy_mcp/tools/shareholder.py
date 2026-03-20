@@ -1,8 +1,15 @@
 """주주총회 소집공고 관련 MCP tools"""
 
+import logging
 from datetime import datetime
 from open_proxy_mcp.dart.client import DartClient
-from open_proxy_mcp.tools.parser import parse_agenda_items, parse_meeting_info
+from open_proxy_mcp.tools.parser import (
+    parse_agenda_items, parse_meeting_info,
+    validate_agenda_result, _extract_notice_section, _extract_agenda_zone,
+)
+from open_proxy_mcp.llm.client import extract_agenda_with_llm
+
+logger = logging.getLogger(__name__)
 
 # ── 문서 캐시 (프로세스 레벨) ──
 
@@ -224,7 +231,21 @@ def register_tools(mcp):
             rcept_no: 접수번호 (예: 20260225000123)
         """
         doc = await _get_document_cached(rcept_no)
-        agenda = parse_agenda_items(doc["text"])
+        text = doc["text"]
+        agenda = parse_agenda_items(text)
+
+        if not validate_agenda_result(agenda):
+            logger.warning(f"정규식 파싱 실패/의심 — LLM fallback 시도: {rcept_no}")
+            import re
+            section = _extract_notice_section(text)
+            zone = _extract_agenda_zone(section) if section else None
+            if zone:
+                zone_clean = re.sub(r'\n+', ' ', zone)
+                agenda = await extract_agenda_with_llm(zone_clean)
+            if not validate_agenda_result(agenda):
+                logger.error(f"LLM fallback도 실패: {rcept_no}")
+                return "안건을 파싱할 수 없습니다. (정규식 + LLM 모두 실패)"
+
         return _format_agenda_tree(agenda)
 
     @mcp.tool()

@@ -64,3 +64,57 @@
 - `제` 없는 비표준 번호 (케이피티유: `3-1호`)
 - 기타 예외적 문서 포맷
 - 유가증권/코스닥 대상으로 범위 한정 예정
+
+### 하이브리드 LLM Fallback 구현
+
+**구조:**
+```
+get_meeting_agenda(rcept_no)
+        │
+        ▼
+  get_document (캐싱)
+        │ text
+        ▼
+  parse_agenda_items(text) ── 정규식 파싱
+        │ agenda[]
+        ▼
+  validate_agenda_result()
+        │
+   ✅ True ──────────────────────┐
+        │ ❌ False               │
+        │ (0건/중복/제목200자↑)   │
+        ▼                        │
+  extract_notice_section()       │
+        │ section                │
+        ▼                        │
+  extract_agenda_zone()          │
+        │ zone (500~1500자)      │
+        ▼                        │
+  LLM fallback                   │
+  Claude Sonnet (→OpenAI)        │
+        │ agenda[]               │
+        ▼                        │
+  validate again                 │
+        │                        │
+   ✅ ──────────────┐            │
+        │ ❌        │            │
+        ▼           ▼            ▼
+  "파싱 불가"   format_agenda_tree()
+   + 로그            │
+                     ▼
+               마크다운 응답
+```
+
+**구현 파일:**
+- `open_proxy_mcp/llm/client.py` — LLM 호출 (Claude Sonnet 기본, OpenAI 대체)
+- `open_proxy_mcp/tools/parser.py` — `validate_agenda_result()` 추가
+- `open_proxy_mcp/tools/shareholder.py` — `get_meeting_agenda`에 fallback 로직
+
+**트리거 조건 (validate_agenda_result):**
+- 빈 리스트 (0건)
+- 같은 number 중복 (정정공고 잔류)
+- 제목 200자 초과 (zone 텍스트 딸려옴)
+
+**토큰 사용:** 정규식 성공 시 0, fallback 시 zone 크기만큼 (500~1500자)
+
+**DLQ:** 로그만 남김 (별도 저장소 없음)

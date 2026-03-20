@@ -1,3 +1,5 @@
 mcp
 httpx
 python-dotenv
+anthropic
+openai
