@@ -127,23 +127,17 @@ def _extract_notice_section(text: str) -> str | None:
     실제 본문 헤더 판별: '주주총회 소집공고' 뒤에 '(제N기' 또는 기수/정기/임시 표현이 따라옴.
     인라인 언급('소집공고로 갈음', '소집공고 조직도' 등)은 제외.
     """
-    # 본문 헤더 후보: 뒤에 (제N기, 정기, 임시 등이 따라오는 것
-    body_header = re.search(
-        r'주주총회\s*소집\s*공고\s*\(?\s*(?:제\s*\d+\s*기|정기|임시)',
-        text,
-    )
+    # '주주총회 소집공고' 뒤에 일시/장소/회의목적사항이 나오는 것이 실제 본문 헤더
+    # 유효 후보: 뒤에 일시/장소/회의목적사항이 따라오는 헤더
+    # 여러 후보 중 마지막 것 선택 (정정 preamble 안 가짜 헤더는 앞쪽, 실제 본문은 뒤쪽)
+    section_start = None
+    for m in re.finditer(r'주주총회\s*소집\s*공고', text):
+        after = text[m.end():m.end()+500]
+        if re.search(r'일\s*시|장\s*소|회의\s*(?:의?\s*)?목적\s*사항|부의\s*안건', after):
+            section_start = m.start()
 
-    if body_header:
-        section_start = body_header.start()
-    else:
-        # fallback: '주주총회 소집공고' 뒤에 일시/장소/회의목적사항이 나오는 것
-        for m in re.finditer(r'주주총회\s*소집\s*공고', text):
-            after = text[m.end():m.end()+500]
-            if re.search(r'일\s*시|장\s*소|회의\s*(?:의?\s*)?목적\s*사항|부의\s*안건', after):
-                section_start = m.start()
-                break
-        else:
-            return None
+    if section_start is None:
+        return None
 
     # 끝: 다음 대섹션
     section_end = len(text)
