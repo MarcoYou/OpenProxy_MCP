@@ -9,7 +9,7 @@ DART(전자공시시스템) 데이터를 MCP 프로토콜로 제공하는 Python
 - FastMCP (`mcp.server.fastmcp`) — 데코레이터 기반 MCP 서버 프레임워크
 - httpx — async HTTP 클라이언트
 - python-dotenv — 환경변수 관리
-- BeautifulSoup4 — DART 문서 HTML/XML 파싱 (테이블 구조 보존)
+- BeautifulSoup4 + lxml — DART 문서 HTML 파싱 (테이블 구조 보존, lxml 30% 빠름)
 - OpenDART API (https://opendart.fss.or.kr/)
 
 ## 프로젝트 구조
@@ -18,10 +18,12 @@ open_proxy_mcp/       # 메인 패키지
   __init__.py
   server.py           # FastMCP 서버 진입점
   tools/              # MCP tool 정의 (도메인별 분리)
-    shareholder.py    # 주주총회 소집공고 관련 (4 tools + 캐시 + 포매터)
-    parser.py         # 소집공고 파싱 — 안건/비안건 분리 (순수 함수)
+    shareholder.py    # 주주총회 소집공고 관련 (5 tools + 캐시 + 포매터)
+    parser.py         # 소집공고 파싱 — 안건 트리 + 안건 상세 + 비안건 (bs4+regex)
   dart/               # OpenDART API 클라이언트
-    client.py         # API 호출 래퍼 (인증, 에러핸들링, 캐싱)
+    client.py         # API 호출 래퍼 (인증, 에러핸들링, 캐싱, HTML 보존)
+  llm/                # LLM fallback 클라이언트
+    client.py         # 파서 실패 시 LLM으로 안건 추출
 ```
 
 ## 설계 원칙
@@ -31,6 +33,13 @@ open_proxy_mcp/       # 메인 패키지
 - corpCode.xml 등 무거운 데이터는 캐싱 적용
 - 입력값(날짜 형식 등) 검증 처리
 - 단일 파일 모놀리스 지양, 모듈 분리 유지
+
+## CLAUDE.md 작성 원칙
+**이 파일은 가볍게 유지할 것.** 상세 내용을 여기에 직접 쓰지 않고, 특정 케이스에 어떤 문서를 참고해야 하는지 포인터로 안내하는 방식으로 작성한다.
+- 파서 상세/벤치마크/실패 케이스 → `DEVLOG.md` 참조
+- 참고 프로젝트 상세 → `references.md` 참조
+- 미완료 작업 → `homework.md` 참조
+- 프로젝트 히스토리 → `git log` 참조
 
 ## 개발 방식
 - **점진적 빌드**: 한 번에 하나씩 만들고 확인하고 넘어감
@@ -50,15 +59,22 @@ open_proxy_mcp/       # 메인 패키지
 - **FactSet** — 엔터프라이즈 MCP 거버넌스 패턴(Central Registry, Proxied Access), 데이터셋별 tool 구조 참고.
 - 공통 교훈: raw API 그대로 노출하지 말고 LLM이 쓰기 쉽게 구조화, 도메인별 tool 분리, 캐싱 필수
 
-## 파서 테스트-개선 루프
-파서(`tools/parser.py`)는 소집공고 텍스트 패턴에 의존하므로 지속적 검증 필요.
-학습 셋(KT&G, LG화학, 삼성전자, 기아, NAVER, 고려아연, SK이노) 외 기업으로 테스트.
+## 파서 아키텍처
+파서 상세(패턴 목록, 실패 케이스 분류, 벤치마크 결과 등)는 **DEVLOG.md**의 해당 날짜 항목 참조.
 
-1. 랜덤 기업의 소집공고 1건 가져오기
-2. `get_meeting_agenda` / `get_meeting_info` 실행
-3. 결과 검증 — 누락/오분류 확인
-4. `parser.py` 패턴 수정 및 폴백 보강
-5. 반복 (최소 3회)
+**파싱 파이프라인:**
+1. `client.py` — DART API에서 HTML+text 동시 반환
+2. `parser.py` — bs4(lxml)로 HTML 섹션 경계 추출 → regex로 안건 패턴 매치
+3. 실패 시 text-only regex fallback → 그래도 실패 시 LLM fallback
+
+**현재 처리율:** 250건 기준 93% (bs4+regex), 나머지 7%는 LLM fallback 대상.
+
+## 파서 테스트-개선 루프
+1. 전체 소집공고 검색 (250건+)
+2. `parse_agenda_items()` 실행, `validate_agenda_result()` 체크
+3. 실패 케이스 zone 텍스트 확인 → 패턴 추가
+4. **250건 전수 regression 테스트** — 기존 성공 깨짐 없는지 반드시 확인
+5. 반복
 
 ## 주요 커맨드
 ```bash
