@@ -1381,8 +1381,13 @@ def _empty_personnel_summary() -> dict:
 
 # ── 정관변경 파싱 ──
 
-def parse_aoi(html: str) -> dict:
+def parse_aoi(html: str, sub_agendas: list[dict] | None = None) -> dict:
     """정관변경 안건에서 세부의안별 변경전/변경후/사유를 구조화 추출
+
+    Args:
+        html: 문서 HTML
+        sub_agendas: agm_agenda에서 가져온 정관변경 세부의안 목록
+                     [{"number": "제2-1호", "title": "집중투표제 배제 조항 삭제"}, ...]
 
     Returns:
         {"amendments": [...], "summary": {...}}
@@ -1481,12 +1486,72 @@ def parse_aoi(html: str) -> dict:
                             "reason": reason,
                         })
 
+    # 세부의안 매핑: subAgendaId가 없는 amendments에 agm_agenda 세부의안 번호 부여
+    if sub_agendas and any(not a.get("subAgendaId") for a in amendments):
+        _map_sub_agendas_to_amendments(amendments, sub_agendas)
+
     summary = {
         "totalAmendments": len(amendments),
         "categories": list(dict.fromkeys(a["label"] for a in amendments if a["label"])),
     }
 
     return {"amendments": amendments, "summary": summary}
+
+
+def _map_sub_agendas_to_amendments(amendments: list[dict], sub_agendas: list[dict]) -> None:
+    """agm_agenda 세부의안을 charterChanges amendments에 매핑
+
+    전략:
+    1. reason/label 키워드로 매칭 시도
+    2. 매칭 못 하면 순서 기반 fallback
+    3. 이미 subAgendaId 있으면 건드리지 않음
+    """
+    # 이미 전부 매핑돼 있으면 스킵
+    if all(a.get("subAgendaId") for a in amendments):
+        return
+
+    subs = []
+    for s in sub_agendas:
+        num = s.get("number", "").replace("제", "").replace("호", "")
+        title = s.get("title", "")
+        subs.append({"id": num, "title": title, "used": False})
+
+    # 1차: 키워드 매칭
+    for a in amendments:
+        if a.get("subAgendaId"):
+            # 이미 있으면 used 표시
+            for s in subs:
+                if s["id"] == a["subAgendaId"]:
+                    s["used"] = True
+            continue
+
+        reason = (a.get("reason", "") + " " + a.get("label", "")).lower()
+        best_match = None
+        best_score = 0
+
+        for s in subs:
+            if s["used"]:
+                continue
+            title_words = [w for w in s["title"].replace("ㆍ", "·").split() if len(w) > 1]
+            score = sum(1 for w in title_words if w.lower() in reason)
+            if score > best_score:
+                best_score = score
+                best_match = s
+
+        if best_match and best_score >= 1:
+            a["subAgendaId"] = best_match["id"]
+            a["label"] = a["label"] or best_match["title"]
+            best_match["used"] = True
+
+    # 2차: 매칭 못 한 나머지 — 순서 기반
+    unmapped_amendments = [a for a in amendments if not a.get("subAgendaId")]
+    unused_subs = [s for s in subs if not s["used"]]
+
+    for a, s in zip(unmapped_amendments, unused_subs):
+        a["subAgendaId"] = s["id"]
+        if not a["label"] or a["label"] in ("(신설)", a.get("clause", "")):
+            a["label"] = s["title"]
+        s["used"] = True
 
 
 def _empty_aoi_summary() -> dict:

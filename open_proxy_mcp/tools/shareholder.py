@@ -743,10 +743,19 @@ def register_tools(mcp):
         """
         doc = await _get_document_cached(rcept_no)
         html = doc.get("html", "")
+        text = doc["text"]
         if not html:
             return "정관변경 사항을 파싱할 수 없습니다. (HTML 없음)"
 
-        result = parse_aoi(html)
+        # 세부의안 목록 확보 (agm_agenda 체이닝)
+        agenda = parse_agenda_items(text, html=html)
+        charter_subs = []
+        for item in agenda:
+            if "정관" in item.get("title", ""):
+                charter_subs = item.get("children", [])
+                break
+
+        result = parse_aoi(html, sub_agendas=charter_subs if charter_subs else None)
 
         if not result.get("amendments"):
             return "정관변경 안건이 없습니다."
