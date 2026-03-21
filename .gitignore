@@ -19,3 +19,7 @@ venv/
 .DS_Store
 Thumbs.db
 .mcp.json
+
+# Test artifacts
+test_batch*.py
+test_batch*.json
