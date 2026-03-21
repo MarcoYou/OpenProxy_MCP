@@ -509,8 +509,9 @@ def register_tools(mcp):
     ) -> str:
         """주주총회 소집공고에서 재무제표를 구조화하여 반환합니다.
 
-        재무상태표(대차대조표)와 손익계산서를 연결/별도 구분하여
-        당기/전기 데이터를 구조화된 형태로 반환합니다.
+        agm_items(안건 상세)의 재무제표 블록을 기반으로
+        재무상태표/손익계산서를 정규화합니다.
+        안건 상세 파싱 실패 시 HTML 직접 파싱으로 fallback.
 
         Args:
             rcept_no: 접수번호 (예: 20260225000123)
@@ -523,6 +524,18 @@ def register_tools(mcp):
         if not html:
             return "재무제표를 파싱할 수 없습니다. (HTML 없음)"
 
+        # 체이닝: agm_items 로직으로 재무제표 안건 존재 여부 판단
+        details = parse_agenda_details(html)
+        fs_found = False
+        if details:
+            for d in details:
+                title = d.get("title", "")
+                if any(kw in title for kw in ["재무제표", "재무상태표", "대차대조표"]):
+                    fs_found = True
+                    logger.info(f"재무제표 안건 확인: {d['number']} — {title[:40]}")
+                    break
+
+        # 재무제표 테이블 정규화 (HTML 직접 파싱)
         result = parse_financial_statements(html)
 
         # 빈 결과 체크 — 안건 트리에서 이유 파악
