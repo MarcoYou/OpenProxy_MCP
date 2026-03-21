@@ -1453,12 +1453,23 @@ def _extract_retained_earnings(container) -> dict | None:
          "items": [{"account": "배당금", "current": "477,528", "prior": "453,068"}, ...]}
     """
     # 이익잉여금처분계산서 테이블 찾기
+    # 제목 테이블과 데이터 테이블이 분리된 경우가 있으므로,
+    # "미처분이익잉여금" 키워드가 있는 테이블 또는 "이익잉여금처분" 키워드 + 행 5개 이상
     for table in container.find_all('table'):
         table_text = re.sub(r'\s+', '', table.get_text())
-        if '이익잉여금처분' not in table_text and '미처분이익' not in table_text:
-            continue
 
         rows = table.find_all('tr')
+
+        # 미처분이익잉여금이 있으면 데이터 테이블 확실
+        is_data = '미처분이익' in table_text or '미처분이익잉여금' in table_text
+        # 이익잉여금처분 + 행 5개 이상 + 첫 행에 과목/구분/기간
+        if not is_data and '이익잉여금처분' in table_text and len(rows) >= 5:
+            first_cells = [re.sub(r'\s+', '', c.get_text()) for c in rows[0].find_all(['td', 'th'])]
+            if any('과목' in c or '구분' in c or '당' in c or '전' in c for c in first_cells):
+                is_data = True
+
+        if not is_data:
+            continue
         if len(rows) < 3:
             continue
 
