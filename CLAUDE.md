@@ -14,17 +14,39 @@ DART(전자공시시스템) 데이터를 MCP 프로토콜로 제공하는 Python
 
 ## 프로젝트 구조
 ```
-open_proxy_mcp/       # 메인 패키지
-  __init__.py
+open_proxy_mcp/       # MCP 서버 (Python)
   server.py           # FastMCP 서버 진입점
-  tools/              # MCP tool 정의 (도메인별 분리)
-    shareholder.py    # 주주총회 소집공고 관련 (5 tools + 캐시 + 포매터)
-    parser.py         # 소집공고 파싱 — 안건 트리 + 안건 상세 + 비안건 (bs4+regex)
-  dart/               # OpenDART API 클라이언트
-    client.py         # API 호출 래퍼 (인증, 에러핸들링, 캐싱, HTML 보존)
-  llm/                # LLM fallback 클라이언트
-    client.py         # 파서 실패 시 LLM으로 안건 추출
+  tools/
+    shareholder.py    # MCP tool 9개 (agm_*) + 포매터 + format_krw
+    parser.py         # 파서 (bs4+regex) — 안건/재무/인사/정정
+  dart/
+    client.py         # OpenDART API 래퍼 (인증, 캐싱, HTML 보존)
+  llm/
+    client.py         # LLM fallback
+
+OpenProxy/            # 프론트엔드 (React/Vite) — git clone from HojiPark/openproxy
+  frontend/
+    src/data/
+      schema.ts       # v3 통합 스키마 타입
+      mockData.ts     # JSON → 프론트엔드 데이터 변환
+      pipeline/       # MCP에서 생성한 v3 JSON 파일
+    src/components/
+      AgendaAnalysis.tsx  # 안건 상세 렌더링 (재무 테이블, 후보자 등)
+
+samples/              # 로컬 샘플 (gitignore)
+blueprint.md          # tool 체계 + 데이터 흐름 다이어그램
 ```
+
+## 출력 포맷
+- **Markdown (md)**: LLM이 MCP 연결해서 사용할 때의 출력. 사람이 읽기 좋은 형태.
+- **JSON**: 프론트엔드에 붙이는 용도. v3 스키마(`schema.ts`) 호환.
+- 모든 tool은 `format="md"` (기본) / `format="json"` 선택 가능.
+
+## 프론트엔드 수정 가이드
+- display/UI 관련 수정 → `OpenProxy/frontend/src/` 안의 파일 수정
+- 데이터/파싱 관련 수정 → `open_proxy_mcp/tools/` 안의 파일 수정
+- v3 JSON 스키마 변경 → `OpenProxy/frontend/src/data/schema.ts` + `mockData.ts` 동시 수정
+- OpenProxy는 별도 git repo (HojiPark/openproxy) — 서브디렉토리로 클론한 것
 
 ## 설계 원칙
 - 각 DART API 도메인(공시, 재무, 지분 등)은 `dart/` 하위 모듈로 분리
