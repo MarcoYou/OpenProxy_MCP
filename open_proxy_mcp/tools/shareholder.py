@@ -78,6 +78,7 @@ from open_proxy_mcp.tools.parser import (
     parse_agenda_details, validate_agenda_details,
     parse_financial_statements,
     parse_correction_details,
+    parse_personnel,
 )
 from open_proxy_mcp.llm.client import extract_agenda_with_llm
 
@@ -697,6 +698,35 @@ def register_tools(mcp):
         return _format_correction_details(result)
 
     @mcp.tool()
+    async def agm_personnel(
+        rcept_no: str,
+        format: str = "md",
+    ) -> str:
+        """주주총회 소집공고에서 이사/감사 선임·해임 정보를 반환합니다.
+
+        선임/해임 안건의 후보자 정보(성명, 생년월일, 직위, 추천인,
+        주요경력, 결격사유 등)를 구조화하여 반환합니다.
+
+        Args:
+            rcept_no: 접수번호 (예: 20260225000123)
+            format: 반환 형식. "md" (마크다운, 기본) 또는 "json"
+        """
+        doc = await _get_document_cached(rcept_no)
+        html = doc.get("html", "")
+        if not html:
+            return "인사 정보를 파싱할 수 없습니다. (HTML 없음)"
+
+        result = parse_personnel(html)
+
+        if not result.get("appointments"):
+            return "선임/해임 안건이 없습니다."
+
+        if format == "json":
+            return json.dumps(result, ensure_ascii=False, indent=2)
+
+        return _format_personnel(result)
+
+    @mcp.tool()
     async def agm_steward(
         ticker: str,
         bgn_de: str = "",
@@ -763,6 +793,10 @@ def register_tools(mcp):
         fs = parse_financial_statements(html) if html else None
         fs_highlight = _build_financial_highlight(fs) if fs else None
 
+        # 5. 인사 하이라이트
+        personnel = parse_personnel(html) if html else None
+        personnel_summary = personnel.get("summary") if personnel else None
+
         # 포매팅
         corp_name = corp_info.get('corp_name', ticker)
         lines = [
@@ -789,6 +823,27 @@ def register_tools(mcp):
             lines.append("")
             for item in fs_highlight:
                 lines.append(f"- **{item['label']}**: {item['value']}")
+            lines.append("")
+
+        # 인사 하이라이트
+        if personnel_summary and personnel_summary.get("total_appointments", 0) > 0:
+            lines.append("## 인사 현황")
+            lines.append("")
+            parts = []
+            if personnel_summary.get("directors"): parts.append(f"이사 {personnel_summary['directors']}명")
+            if personnel_summary.get("outside_directors"): parts.append(f"사외이사 {personnel_summary['outside_directors']}명")
+            if personnel_summary.get("auditors"): parts.append(f"감사 {personnel_summary['auditors']}명")
+            if personnel_summary.get("audit_committee"): parts.append(f"감사위원회 {personnel_summary['audit_committee']}명")
+            if personnel_summary.get("dismissals"): parts.append(f"해임 {personnel_summary['dismissals']}명")
+            if parts:
+                lines.append(f"- **선임/해임**: {', '.join(parts)}")
+            # 후보자 이름 나열
+            names = []
+            for a in personnel.get("appointments", []):
+                for c in a.get("candidates", []):
+                    names.append(f"{c.get('name','?')}({a['category']})")
+            if names:
+                lines.append(f"- **후보자**: {', '.join(names)}")
             lines.append("")
 
         return "\n".join(lines)
@@ -871,6 +926,43 @@ def _build_financial_highlight(fs: dict) -> list[dict] | None:
             break
 
     return highlights if highlights else None
+
+
+def _format_personnel(result: dict) -> str:
+    """인사 안건을 마크다운으로 포매팅"""
+    lines = ["## 선임/해임 현황", ""]
+
+    s = result.get("summary", {})
+    parts = []
+    if s.get("directors"): parts.append(f"이사 {s['directors']}명")
+    if s.get("outside_directors"): parts.append(f"사외이사 {s['outside_directors']}명")
+    if s.get("auditors"): parts.append(f"감사 {s['auditors']}명")
+    if s.get("audit_committee"): parts.append(f"감사위원회 {s['audit_committee']}명")
+    if s.get("dismissals"): parts.append(f"해임 {s['dismissals']}명")
+    if parts:
+        lines.append(f"*{', '.join(parts)}*")
+        lines.append("")
+
+    for a in result.get("appointments", []):
+        lines.append(f"### {a['number']}: {a['title'][:50]}")
+        lines.append(f"*{a['action']} | {a['category']}*")
+        lines.append("")
+
+        for c in a.get("candidates", []):
+            lines.append(f"- **{c.get('name', '?')}**")
+            if c.get("birth_date"):
+                lines.append(f"  - 생년월일: {c['birth_date']}")
+            if c.get("position_type"):
+                lines.append(f"  - 직위: {c['position_type']}")
+            if c.get("recommender"):
+                lines.append(f"  - 추천인: {c['recommender']}")
+            if c.get("main_career"):
+                lines.append(f"  - 주요경력: {c['main_career']}")
+            if c.get("disqualification"):
+                lines.append(f"  - 결격사유: {c['disqualification']}")
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 def highlights_has(highlights: list, label: str) -> bool:

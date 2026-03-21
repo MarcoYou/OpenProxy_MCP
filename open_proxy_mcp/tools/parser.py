@@ -972,6 +972,250 @@ def validate_agenda_details(details: list[dict]) -> bool:
     return any(d.get("sections") for d in details)
 
 
+# ── 인사(선임/해임) 파싱 ──
+
+_PERSONNEL_KEYWORDS = ['선임', '해임', '중임', '연임', '재선임']
+_CATEGORY_MAP = [
+    ('감사위원', '감사위원회'),
+    ('사외이사', '사외이사'),
+    ('독립이사', '독립이사'),
+    ('사내이사', '사내이사'),
+    ('기타비상무', '기타비상무이사'),
+    ('상임이사', '상임이사'),
+    ('상근감사', '감사'),
+    ('비상근감사', '감사'),
+    ('감사', '감사'),
+    ('이사', '이사'),
+]
+
+
+def parse_personnel(html: str) -> dict:
+    """선임/해임 안건에서 후보자/대상자 정보를 정규화 추출
+
+    Returns:
+        {"appointments": [...], "summary": {...}}
+    """
+    details = parse_agenda_details(html)
+    if not details:
+        return {"appointments": [], "summary": _empty_personnel_summary()}
+
+    appointments = []
+
+    for d in details:
+        title = d.get("title", "")
+        number = d.get("number", "")
+
+        # 선임/해임 안건인지 확인
+        if not any(kw in title for kw in _PERSONNEL_KEYWORDS):
+            continue
+
+        # 액션 분류
+        action = "선임"
+        if '해임' in title:
+            action = "해임"
+        elif '재선임' in title:
+            action = "재선임"
+        elif '중임' in title:
+            action = "중임"
+        elif '연임' in title:
+            action = "연임"
+
+        # 카테고리 분류
+        category = "이사"
+        for keyword, cat in _CATEGORY_MAP:
+            if keyword in title:
+                category = cat
+                break
+
+        # 후보자 정보 추출 — 가. 서브섹션의 테이블
+        candidates = _extract_candidates(d)
+
+        # 후보자 없으면 제목에서 이름 추출 시도
+        if not candidates:
+            name = _extract_name_from_title(title)
+            if name:
+                candidates = [{"name": name, "position_type": category}]
+
+        appointment = {
+            "number": number,
+            "title": title,
+            "action": action,
+            "category": category,
+            "candidates": candidates,
+        }
+        appointments.append(appointment)
+
+    # 요약
+    summary = _build_personnel_summary(appointments)
+
+    return {"appointments": appointments, "summary": summary}
+
+
+def _extract_candidates(agenda_detail: dict) -> list[dict]:
+    """안건 상세의 가. 서브섹션 테이블에서 후보자 정보 추출"""
+    candidates = []
+
+    for sec in agenda_detail.get("sections", []):
+        heading = sec.get("heading") or ""
+
+        # 가. 후보자의 성명ㆍ생년월일... 테이블
+        if heading.startswith("가.") or '성명' in heading:
+            for block in sec.get("blocks", []):
+                if block["type"] != "table":
+                    continue
+                rows = _parse_md_table(block["content"])
+                if len(rows) < 2:
+                    continue
+
+                headers = rows[0]
+                for row in rows[1:]:
+                    if not row or not row[0].strip():
+                        continue
+                    # "총 ( N ) 명" 행 스킵
+                    if '총' in row[0] and '명' in row[0]:
+                        continue
+
+                    candidate = {"name": row[0].strip()}
+
+                    # 헤더 매핑
+                    for ci, header in enumerate(headers):
+                        if ci >= len(row):
+                            break
+                        h = re.sub(r'\s+', '', header)
+                        val = row[ci].strip()
+                        if '생년월일' in h:
+                            candidate["birth_date"] = val
+                        elif '사외이사' in h and '후보' in h:
+                            candidate["position_type"] = val if val else None
+                        elif '분리선출' in h:
+                            candidate["separate_election"] = val
+                        elif '최대주주' in h:
+                            candidate["relationship_with_major_shareholder"] = val
+                        elif '추천인' in h:
+                            candidate["recommender"] = val
+
+                    candidates.append(candidate)
+
+        # 나. 주된직업ㆍ세부경력 — 기존 후보자에 매칭
+        if heading.startswith("나.") or '주된직업' in heading:
+            for block in sec.get("blocks", []):
+                if block["type"] != "table":
+                    continue
+                rows = _parse_md_table(block["content"])
+                if len(rows) < 2:
+                    continue
+                headers = rows[0]
+                for row in rows[1:]:
+                    if not row or not row[0].strip():
+                        continue
+                    name = row[0].strip()
+                    # 기존 후보자에 매칭
+                    for c in candidates:
+                        if c["name"] == name:
+                            for ci, header in enumerate(headers):
+                                if ci >= len(row):
+                                    break
+                                h = re.sub(r'\s+', '', header)
+                                if '주된직업' in h:
+                                    c["main_career"] = row[ci].strip()
+
+        # 다. 체납사실 — 기존 후보자에 매칭
+        if heading.startswith("다.") or '체납' in heading:
+            for block in sec.get("blocks", []):
+                if block["type"] != "table":
+                    continue
+                rows = _parse_md_table(block["content"])
+                if len(rows) < 2:
+                    continue
+                for row in rows[1:]:
+                    if not row or not row[0].strip():
+                        continue
+                    name = row[0].strip()
+                    for c in candidates:
+                        if c["name"] == name:
+                            c["disqualification"] = "해당사항 없음" if any(
+                                '해당' in cell and '없' in cell for cell in row[1:]
+                            ) else " / ".join(cell.strip() for cell in row[1:] if cell.strip())
+
+    return candidates
+
+
+def _extract_name_from_title(title: str) -> str | None:
+    """안건 제목에서 이름 추출: '사내이사 김용관 선임의 건' → '김용관'"""
+    # 한글 이름 (2~4자)
+    m = re.search(r'(?:이사|감사)\s+([가-힣]{2,4})\s+(?:선임|해임|재선임|중임|연임)', title)
+    if m:
+        return m.group(1)
+    # 영문 이름
+    m = re.search(r'(?:이사|감사)\s+([A-Za-z\s]+?)\s+(?:선임|해임)', title)
+    if m:
+        return m.group(1).strip()
+    # 후보자: 형태
+    m = re.search(r'후보자?\s*[:：]?\s*([가-힣]{2,4}|[A-Za-z\s]+)', title)
+    if m:
+        return m.group(1).strip()
+    # 후보 형태
+    m = re.search(r'후보\s+([가-힣]{2,4})', title)
+    if m:
+        return m.group(1)
+    return None
+
+
+def _parse_md_table(md_content: str) -> list[list[str]]:
+    """마크다운 테이블을 행 리스트로 파싱"""
+    rows = []
+    for line in md_content.split('\n'):
+        line = line.strip()
+        if not line or line.startswith('| ---'):
+            continue
+        if line.startswith('|') and line.endswith('|'):
+            cells = [c.strip() for c in line[1:-1].split('|')]
+            rows.append(cells)
+    return rows
+
+
+def _build_personnel_summary(appointments: list[dict]) -> dict:
+    """인사 안건 요약"""
+    summary = {
+        "total_appointments": len(appointments),
+        "total_candidates": sum(len(a.get("candidates", [])) for a in appointments),
+        "directors": 0,
+        "outside_directors": 0,
+        "auditors": 0,
+        "audit_committee": 0,
+        "dismissals": 0,
+    }
+    for a in appointments:
+        cat = a.get("category", "")
+        action = a.get("action", "")
+        count = len(a.get("candidates", [])) or 1
+
+        if action == "해임":
+            summary["dismissals"] += count
+        elif '감사위원' in cat:
+            summary["audit_committee"] += count
+        elif '감사' in cat:
+            summary["auditors"] += count
+        elif '사외' in cat or '독립' in cat:
+            summary["outside_directors"] += count
+        else:
+            summary["directors"] += count
+
+    return summary
+
+
+def _empty_personnel_summary() -> dict:
+    return {
+        "total_appointments": 0,
+        "total_candidates": 0,
+        "directors": 0,
+        "outside_directors": 0,
+        "auditors": 0,
+        "audit_committee": 0,
+        "dismissals": 0,
+    }
+
+
 # ── 정정공고 파싱 (HTML 기반) ──
 
 def parse_correction_details(html: str) -> dict | None:
