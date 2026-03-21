@@ -991,14 +991,15 @@ def parse_financial_statements(html: str) -> dict:
 
         # <p> 헤딩으로 컨텍스트 갱신
         if child.name == 'p' and text:
-            if _FS_SEPARATE.search(text):
+            text_clean = re.sub(r'\s+', '', text)
+            if _FS_SEPARATE.search(text_clean):
                 is_consolidated = False
-            elif _FS_CONSOLIDATED.search(text) and '별도' not in text:
+            elif _FS_CONSOLIDATED.search(text_clean) and '별도' not in text_clean:
                 is_consolidated = True
 
-            if _FS_BALANCE_SHEET.search(text):
+            if _FS_BALANCE_SHEET.search(text_clean):
                 current_stmt_type = 'balance_sheet'
-            elif _FS_INCOME_STMT.search(text):
+            elif _FS_INCOME_STMT.search(text_clean):
                 current_stmt_type = 'income_statement'
             continue
 
@@ -1008,17 +1009,36 @@ def parse_financial_statements(html: str) -> dict:
             if len(rows) <= 4:
                 # 제목/메타 테이블 — 컨텍스트 갱신
                 table_text = child.get_text()
+                table_text_clean = re.sub(r'\s+', '', table_text)
+
                 if _FS_SEPARATE.search(table_text):
                     is_consolidated = False
-                if _FS_BALANCE_SHEET.search(table_text):
+                elif _FS_CONSOLIDATED.search(table_text):
+                    is_consolidated = True
+
+                if _FS_BALANCE_SHEET.search(table_text_clean):
                     current_stmt_type = 'balance_sheet'
-                elif _FS_INCOME_STMT.search(table_text):
+                    # "연결" 없이 단독 "재무상태표" = 별도
+                    if not _FS_CONSOLIDATED.search(table_text) and not _FS_SEPARATE.search(table_text):
+                        # 이미 연결 재무상태표가 채워져있으면 → 별도
+                        scope_check = "consolidated" if is_consolidated else "separate"
+                        if result[scope_check]["balance_sheet"] is not None:
+                            is_consolidated = False
+                elif _FS_INCOME_STMT.search(table_text_clean):
                     current_stmt_type = 'income_statement'
+                    if not _FS_CONSOLIDATED.search(table_text) and not _FS_SEPARATE.search(table_text):
+                        scope_check = "consolidated" if is_consolidated else "separate"
+                        if result[scope_check]["income_statement"] is not None:
+                            is_consolidated = False
                 continue
 
-            # 데이터 테이블 판별: 행 5개+, 첫 행에 '과목'
+            # 데이터 테이블 판별: 행 5개+, 첫 행에 '과목' 또는 '구분'
             first_cells = [c.get_text().strip() for c in rows[0].find_all(['td', 'th'])]
-            if not any('과' in c and '목' in c for c in first_cells):
+            is_data_table = any(
+                ('과' in c and '목' in c) or ('구' in c and '분' in c)
+                for c in first_cells
+            )
+            if not is_data_table:
                 continue
             if current_stmt_type is None:
                 continue
@@ -1121,7 +1141,7 @@ def _build_column_meta(header_cells: list[str]) -> list[str]:
     columns = []
     for cell in header_cells:
         clean = re.sub(r'\s+', '', cell)
-        if '과' in clean and '목' in clean:
+        if ('과' in clean and '목' in clean) or ('구' in clean and '분' in clean):
             columns.append("account")
         elif '주석' in clean:
             columns.append("note")
@@ -1129,6 +1149,9 @@ def _build_column_meta(header_cells: list[str]) -> list[str]:
             columns.append("current")
         elif '전' in clean:
             columns.append("prior")
+        elif re.match(r'제?\d+기', clean):
+            # 제N기, 제N기말 — 기수 번호로 당기/전기 추론 (큰 번호 = 당기)
+            columns.append("_period_by_num")
         elif not clean:
             # 빈 셀 — colspan 확장분, 앞 컬럼의 서브컬럼
             if columns and columns[-1] in ("current", "prior"):
@@ -1137,6 +1160,25 @@ def _build_column_meta(header_cells: list[str]) -> list[str]:
                 columns.append("unknown")
         else:
             columns.append("unknown")
+
+    # _period_by_num → current/prior 변환 (기수 번호 큰 게 당기)
+    period_indices = [i for i, c in enumerate(columns) if c == "_period_by_num"]
+    if len(period_indices) >= 2:
+        # 헤더 셀에서 기수 번호 추출
+        nums = []
+        for idx in period_indices:
+            m = re.search(r'(\d+)', re.sub(r'\s+', '', header_cells[idx]))
+            nums.append(int(m.group(1)) if m else 0)
+        # 큰 번호 = current
+        if nums[0] >= nums[1]:
+            columns[period_indices[0]] = "current"
+            columns[period_indices[1]] = "prior"
+        else:
+            columns[period_indices[0]] = "prior"
+            columns[period_indices[1]] = "current"
+    elif len(period_indices) == 1:
+        columns[period_indices[0]] = "current"
+
     return columns
 
 
@@ -1201,6 +1243,8 @@ def _normalize_financial_rows(columns: list[str], rows: list[list[str]]) -> list
 def _extract_period_labels(header_cells: list[str]) -> dict:
     """헤더 셀에서 당기/전기 라벨 추출"""
     labels = {"current": "", "prior": ""}
+    period_candidates = []  # (기수번호, 라벨) — 당/전 없는 경우 기수로 추론
+
     for cell in header_cells:
         cell_clean = re.sub(r'\s+', '', cell)
         if '당' in cell_clean:
@@ -1208,9 +1252,20 @@ def _extract_period_labels(header_cells: list[str]) -> dict:
         elif '전' in cell_clean:
             labels["prior"] = cell.strip()
         elif re.match(r'(?:20)?\d{2,4}년', cell_clean):
-            # 연도 기반 — 큰 연도가 당기
             if not labels["current"]:
                 labels["current"] = cell.strip()
             else:
                 labels["prior"] = cell.strip()
+        elif re.match(r'제?\d+기', cell_clean):
+            # 제N기, 제N기말 — 기수 번호 추출
+            m = re.search(r'(\d+)', cell_clean)
+            if m:
+                period_candidates.append((int(m.group(1)), cell.strip()))
+
+    # 당/전 라벨이 없으면 기수 번호로 추론
+    if not labels["current"] and not labels["prior"] and len(period_candidates) >= 2:
+        period_candidates.sort(key=lambda x: x[0], reverse=True)
+        labels["current"] = period_candidates[0][1]
+        labels["prior"] = period_candidates[1][1]
+
     return labels
