@@ -100,6 +100,9 @@
 - [ ] 영문 브랜드명(KT&G 등) → corp_code 매핑 지원 (별칭 또는 영문명 API)
 
 ### 파서 개선
+- [x] 811건 배치 테스트 + 5가지 개선 (93%→97~98% 예상)
+  - ※ 비고 필터링, 보고사항 필터링, 중복 번호 dedup, boundary 패턴 4종, 연속 공백 정리
+- [ ] 811건 전수 regression 테스트 (DART API rate limit 해제 후)
 - [ ] Claude API (Anthropic) fallback 추가 (현재 OpenAI만 테스트 완료)
 
 ### 프론트엔드 연동

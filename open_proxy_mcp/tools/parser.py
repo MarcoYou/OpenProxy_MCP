@@ -45,12 +45,15 @@ _AGENDA_BOUNDARY = (
     r'|\d+\)\s*제\s*\d+'                            # N)제N호
     r'|\(제\s*\d+'                                   # (제N호
     r'|[·ㆍ]?\s*\d+-\d+호'                          # N-M호 (제 없음), ·N-M호
-    r'|성명\s*(?:생년월일|출생)'                      # 후보자 테이블 헤더
+    r'|성\s*명\s*(?:생\s*년\s*월\s*일|출생)'            # 후보자 테이블 헤더 (공백 허용)
     r'|후보자\s*(?:성명|선임직)'                      # 후보자 테이블 헤더
     r'|선임직\s*성명'                                 # 후보자 테이블 헤더
     r'|변경전\s*내용'                                 # 정관변경 비교 테이블
     r'|현행\s+개정'                                   # 정관변경 비교 테이블
+    r'|조문\s+현\s*행\s+변\s*경'                      # 정관변경 비교 테이블 (본느 패턴)
     r'|구분\s+변경전'                                 # 정관변경 비교 테이블
+    r'|구\s*분\s+병합\s*전'                            # 주식병합 비교 테이블
+    r'|가\.\s*의안의?\s*요지'                          # 안건 상세 시작
     r'|※'
     r'|$'
     r'))'
@@ -146,8 +149,25 @@ def parse_agenda_items(text: str, html: str = "") -> list[dict]:
             matches.append((m.start(), m))
     matches.sort(key=lambda x: x[0])
 
+    # ※ 비고 문장에 있는 안건 번호 참조 위치 수집 (안건이 아닌 참조)
+    # ※ 뒤에서 다음 안건 마커(□◎●제N호) 전까지만 note 범위로 잡음
+    _note_spans: set[int] = set()
+    for nm in re.finditer(
+        r'※.+?(?=\s*[□◎●]\s*제|\s*(?<![가-힣])제\s*\d+\s*(?:-\s*\d+)*\s*호\s*(?:의안|안건)?\s*[:：]|$)',
+        zone,
+    ):
+        note_start, note_end = nm.start(), nm.end()
+        for ref in re.finditer(
+            r'제\s*\d+\s*(?:-\s*\d+)*\s*호', zone[note_start:note_end]
+        ):
+            _note_spans.add(note_start + ref.start())
+
     flat = []
     for _, m in matches:
+        # ※ 비고 안의 안건 번호 참조는 스킵
+        if m.start() in _note_spans:
+            continue
+
         l1 = int(m.group(1))
         l2 = int(m.group(2)) if m.group(2) else None
         l3 = int(m.group(3)) if m.group(3) else None
@@ -172,6 +192,10 @@ def parse_agenda_items(text: str, html: str = "") -> list[dict]:
 
         number = _format_number(l1, l2, l3)
 
+        # 보고사항 필터링 (감사보고/영업보고/내부회계 등은 결의 안건이 아님)
+        if _is_report_item(title):
+            continue
+
         flat.append({
             "number": number,
             "level1": l1,
@@ -186,6 +210,16 @@ def parse_agenda_items(text: str, html: str = "") -> list[dict]:
     if not flat:
         logger.warning("의안 패턴 매치 없음")
         return []
+
+    # 이중 파싱 방지: 같은 number가 중복되면 첫 번째 것만 유지
+    # (소집공고 의안 목록이 먼저, 경영참고사항 상세가 뒤에 나오므로 첫 번째가 정확)
+    seen_numbers: set[str] = set()
+    deduped = []
+    for item in flat:
+        if item["number"] not in seen_numbers:
+            seen_numbers.add(item["number"])
+            deduped.append(item)
+    flat = deduped
 
     return _build_tree(flat)
 
@@ -508,6 +542,7 @@ def _format_number(l1: int, l2: int | None, l3: int | None) -> str:
 def _clean_title(title: str) -> str:
     """제목 정리: 후행 기호, 번호, 특수문자 제거"""
     title = title.strip()
+    title = re.sub(r'\s{2,}', ' ', title)  # 연속 공백 정리
     title = re.sub(r'^[:：]\s*', '', title)  # 선행 콜론 제거
     title = re.sub(r'[□■○▶●①②③④⑤⑥⑦⑧⑨⑩]', '', title)  # 마커/기호/원문자 제거
     title = re.sub(r'[\s]*[ㆍ·\.\-]\s*$', '', title)
@@ -519,6 +554,16 @@ def _clean_title(title: str) -> str:
         title = re.sub(r'\s*\d+\)\s*$', '', title)
     title = re.sub(r'\s*[\(\[]\s*$', '', title)  # 끝에 매달린 여는 괄호/대괄호 제거
     return title.strip()
+
+
+_REPORT_ITEMS_RE = re.compile(
+    r'^(?:감사\s*보고|영업\s*보고|내부\s*회계|사업\s*보고|내부\s*통제)',
+)
+
+
+def _is_report_item(title: str) -> bool:
+    """보고사항인지 판별 (감사보고, 영업보고, 내부회계 등 — 결의 안건 아님)"""
+    return bool(_REPORT_ITEMS_RE.search(title.strip()))
 
 
 def _detect_source(text: str) -> str | None:
