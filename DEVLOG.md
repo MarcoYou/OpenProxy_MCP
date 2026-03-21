@@ -233,3 +233,58 @@ get_meeting_agenda(rcept_no)
 - 13개 기업은 여전히 정규식으로 해결 불가 — LLM fallback 필요
 - `get_agenda_detail`의 다기업 검증 미완 (KT&G만 상세 확인)
 - lxml-xml 파서는 DART 문서의 대소문자 혼용 때문에 사용 불가
+
+## 2026-03-21 (continued)
+
+### agm_financials 완성
+- 재무상태표/손익계산서 정규화 → 100건 96% 성공
+- 자본변동표 추가 + 자사주 취득/소각 플래그
+- 이익잉여금처분계산서 전체 반환 + has_dividend 플래그
+- 정정공고 사유 분류 (철회/보고전환/이사회승인)
+- `format_krw()` 단위 변환 유틸 (백만원×값 → 조/억/만)
+- 컬럼 정규화 (4/5/6컬럼 → 통일), 주석 유무 동적 감지
+
+### agm_personnel 완성
+- 이사/감사/감사위원 선임·해임 정규화 (41건 에러 0)
+- v3 스키마 호환 (camelCase 키명)
+- 세부경력 기간/내용 분리 (careerDetails)
+- 결격사유 3필드 분리 (eligibility)
+- 직무수행계획/추천사유 전문 반환 + 확인서 텍스트 제거
+- 소스 태그(주주제안) 제거 후 빈 제목 fallback 수정
+
+### agm_steward 오케스트레이터
+- agm_tldr → agm_sherlock → agm_steward 리네이밍
+- 재무 하이라이트 자동 추출 (format_krw 적용)
+- 인사 하이라이트 (선임 N명, 후보자 이름)
+
+### tool 리네이밍 (agm_ prefix)
+9개 tool: agm_search, agm_steward, agm_agenda, agm_info, agm_items, agm_financials, agm_personnel, agm_corrections, agm_document
+
+### 프론트엔드 연동 (OpenProxy)
+- KT&G/삼성전자/NAVER/LG화학 MCP v3 JSON 생성 → 프론트엔드 표시
+- 실데이터 반영: CEO, 최대주주(지분율), 회계월 (DART company.json/hyslrSttus.json)
+- 재무 하이라이트 카드 (자산총계/매출/영업이익/당기순이익 + 전년비)
+- 재무제표 로우 데이터 테이블 (연결/별도 탭 + BS/IS/자본변동표/처분계산서)
+- 단위 변환 표시 (백만원×값 → 억/조, 단위:원 유지)
+- 계층 트리 테이블 (자산>유동>세부 접이식 ▼/▶)
+- 변화율 컬럼 (+X.X% 초록 / -X.X% 빨강 / 신규 파랑)
+- 계정명 정리 (Ⅰ. 1. l. 접두사 제거 + 공백 정리)
+- 긴 제목 truncate + tooltip
+- 'AI 요약' → '요약' 변경
+- 주석(note) 컬럼 숨김
+
+### 파서 수정
+- 소스 태그(주주제안) 제거 시 제목 보호 — 괄호 안만 제거
+- 선행 콜론 제거 fallback
+- LG화학 제3호 "주주 제안의 건" 정상 파싱
+
+### 오늘의 성과
+- MCP 9개 tool 완성 + 프론트엔드 연동까지 e2e 동작
+- 4개 기업(KT&G/삼성전자/NAVER/LG화학) 실데이터로 프론트엔드 표시
+- 재무제표 계층 트리, 변화율, 단위 변환 등 display 완성
+
+### 오늘의 실패 / 한계
+- careerCompanyGroups 회사명 분리 정확도 (부서명 포함 이슈)
+- 주총 이력 관리 (정기/임시, 연도별) — 프론트엔드/DB에서 처리 필요
+- mockData.ts 하드코딩 → API 자동화 미완 (수동 JSON 생성)
+- NAVER 최대주주 지분율 0.00% (DART API 한계)
