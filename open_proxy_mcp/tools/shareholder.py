@@ -697,15 +697,16 @@ def register_tools(mcp):
         return _format_correction_details(result)
 
     @mcp.tool()
-    async def agm_tldr(
+    async def agm_sherlock(
         ticker: str,
         bgn_de: str = "",
         end_de: str = "",
     ) -> str:
-        """주주총회 소집공고 종합 브리핑 — 한 번에 핵심 정보를 반환합니다.
+        """주주총회 소집공고 스마트 오케스트레이터.
 
         종목코드 또는 회사명으로 최신 소집공고를 찾아서
-        일시/장소, 안건 트리, 정정 사항을 한 덩어리로 반환합니다.
+        회의정보, 안건 트리, 재무 하이라이트(자산총계/매출/당기순이익/배당),
+        자사주 현황, 정정 사항을 한 번에 반환합니다.
 
         Args:
             ticker: 종목코드 또는 회사명
@@ -731,7 +732,7 @@ def register_tools(mcp):
         if not filings:
             return f"{corp_info.get('corp_name', ticker)}의 주주총회 소집공고가 없습니다."
 
-        # 최신 공시 선택 (날짜순 마지막)
+        # 최신 공시 선택
         filings.sort(key=lambda x: x.get("rcept_dt", ""))
         latest = filings[-1]
         rcept_no = latest["rcept_no"]
@@ -758,9 +759,14 @@ def register_tools(mcp):
                 ],
             }
 
+        # 4. 재무 하이라이트
+        fs = parse_financial_statements(html) if html else None
+        fs_highlight = _build_financial_highlight(fs) if fs else None
+
         # 포매팅
+        corp_name = corp_info.get('corp_name', ticker)
         lines = [
-            f"# {corp_info.get('corp_name', ticker)} 주주총회 TL;DR",
+            f"# {corp_name} 주주총회 Sherlock Report",
             "",
         ]
 
@@ -775,8 +781,100 @@ def register_tools(mcp):
 
         # 안건 트리
         lines.append(_format_agenda_tree(agenda))
+        lines.append("")
+
+        # 재무 하이라이트
+        if fs_highlight:
+            lines.append("## 재무 하이라이트")
+            lines.append("")
+            for item in fs_highlight:
+                lines.append(f"- **{item['label']}**: {item['value']}")
+            lines.append("")
 
         return "\n".join(lines)
+
+
+def _build_financial_highlight(fs: dict) -> list[dict] | None:
+    """재무제표에서 핵심 지표를 format_krw로 변환하여 추출"""
+    highlights = []
+
+    # 연결 우선, 없으면 별도
+    scope = "consolidated" if fs["consolidated"]["balance_sheet"] else "separate"
+
+    bs = fs[scope].get("balance_sheet")
+    is_stmt = fs[scope].get("income_statement")
+    unit = ""
+
+    # 재무상태표 하이라이트
+    if bs:
+        unit = bs.get("unit", "")
+        for row in bs.get("rows", []):
+            acct = row[0].replace(" ", "")
+            val_idx = 2 if len(row) > 3 else 1  # note 있으면 [2], 없으면 [1]
+            val = row[val_idx] if val_idx < len(row) else ""
+            if '자산총계' in acct and val:
+                highlights.append({"label": "자산총계", "value": format_krw(val, unit)})
+            elif '부채총계' in acct and val and not highlights_has(highlights, '부채총계'):
+                highlights.append({"label": "부채총계", "value": format_krw(val, unit)})
+            elif '자본총계' in acct and '부채' not in acct and val and not highlights_has(highlights, '자본총계'):
+                highlights.append({"label": "자본총계", "value": format_krw(val, unit)})
+
+    # 손익계산서 하이라이트
+    if is_stmt:
+        unit = is_stmt.get("unit", "")
+        for row in is_stmt.get("rows", []):
+            acct = row[0].replace(" ", "")
+            val_idx = 2 if len(row) > 3 else 1
+            val = row[val_idx] if val_idx < len(row) else ""
+            if ('매출' in acct and '액' in acct or acct.startswith('매출')) and '원가' not in acct and '총' not in acct and val and not highlights_has(highlights, '매출'):
+                highlights.append({"label": "매출", "value": format_krw(val, unit)})
+            elif '영업이익' in acct and val and not highlights_has(highlights, '영업이익'):
+                highlights.append({"label": "영업이익", "value": format_krw(val, unit)})
+            elif '당기순이익' == acct and val:
+                highlights.append({"label": "당기순이익", "value": format_krw(val, unit)})
+
+    # 배당 하이라이트
+    re_stmt = fs.get("retained_earnings")
+    if re_stmt and re_stmt.get("has_dividend"):
+        unit = re_stmt.get("unit", "")
+        for item in re_stmt.get("items", []):
+            if '배당금' in item["account"] or '현금배당' in item["account"]:
+                if item["current"]:
+                    # 처분계산서에서 배당은 음수로 표시되므로 절대값
+                    raw = item["current"].replace("(", "").replace(")", "").replace("-", "")
+                    highlights.append({
+                        "label": "배당금",
+                        "value": format_krw(raw, unit),
+                    })
+                # 주당배당금 추출
+                m = re.search(r'(\d[\d,]*)\s*원\s*\(', item["account"])
+                if m:
+                    highlights.append({
+                        "label": "주당배당금",
+                        "value": f"{m.group(1)}원",
+                    })
+                break
+    elif re_stmt and not re_stmt.get("has_dividend"):
+        highlights.append({"label": "배당", "value": "미실시"})
+
+    # 자사주 하이라이트
+    for s in ["consolidated", "separate"]:
+        eq = fs[s].get("equity_changes")
+        if eq:
+            flags = []
+            if eq.get("has_treasury_acquisition"):
+                flags.append("취득")
+            if eq.get("has_treasury_disposal"):
+                flags.append("소각/처분")
+            if flags:
+                highlights.append({"label": "자사주", "value": ", ".join(flags)})
+            break
+
+    return highlights if highlights else None
+
+
+def highlights_has(highlights: list, label: str) -> bool:
+    return any(h["label"] == label for h in highlights)
 
 
 def _format_correction_details(result: dict) -> str:
