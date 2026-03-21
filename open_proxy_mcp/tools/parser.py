@@ -1176,7 +1176,12 @@ def _extract_candidates(agenda_detail: dict) -> list[dict]:
                                 contents = re.split(r'(?=-\s*[가-힣])', contents_raw)
                                 contents = [re.sub(r'^-\s*', '', x).strip() for x in contents if x.strip()]
                             else:
-                                contents = [contents_raw.strip()] if contents_raw.strip() else []
+                                # 법인격 패턴으로 분리: (주)/(재)/(사)/법무법인 앞에서
+                                if re.search(r'(?:\(주\)|\(재\)|\(사\)|법무법인)', contents_raw):
+                                    contents = re.split(r'(?=\(주\)|\(재\)|\(사\)|법무법인)', contents_raw)
+                                    contents = [x.strip() for x in contents if x.strip()]
+                                else:
+                                    contents = [contents_raw.strip()] if contents_raw.strip() else []
 
                             career_details = []
                             for i in range(max(len(periods), len(contents))):
