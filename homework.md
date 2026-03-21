@@ -90,4 +90,10 @@
 
 ### 프론트엔드 연동
 - [ ] v3 스키마 전체 호환 (classification, governanceAnalysis, checklist 등)
-- [ ] OpenProxy 프론트엔드에 JSON 연결
+- [x] OpenProxy 프론트엔드에 JSON 연결 (KT&G MCP v3)
+- [x] 재무제표 로우 데이터 테이블 + 하이라이트 카드
+- [x] 단위 변환 표시 (백만원 × 값 → 억/조, 단위:원 유지)
+- [ ] KT&G mock 데이터 실제 데이터로 대체
+  - [ ] DART `company.json` API로 CEO/회계월 가져오기
+  - [ ] DART `majorstock.json` API로 최대주주 가져오기
+  - [ ] mockData.ts에서 하드코딩 제거 → MCP 또는 API 데이터로 교체
