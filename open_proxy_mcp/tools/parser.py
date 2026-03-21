@@ -1438,7 +1438,14 @@ def parse_aoi(html: str) -> dict:
                         last_sub_id = sub_id
                     else:
                         sub_id = ""
-                        label = col0
+                        # label: 조항명(제N조) 추출 시도, 없으면 col0 truncate
+                        clause_in_col0 = re.search(r'(제\d+(?:조의?\d*)?(?:\([^)]+\))?)', col0)
+                        if clause_in_col0:
+                            label = clause_in_col0.group(1)
+                        elif col0 == '(신설)' or col0 == '<신 설>':
+                            label = '(신설)'
+                        else:
+                            label = col0[:30]
 
                     before = row[before_idx].strip() if before_idx < len(row) else ""
                     after = row[after_idx].strip() if after_idx < len(row) else ""
