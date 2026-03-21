@@ -1299,7 +1299,7 @@ def parse_financial_statements(html: str) -> dict:
                 entry["scope"] = scope
 
     # 배당 정보 — 이익잉여금처분계산서에서 추출
-    result["dividends"] = _extract_dividends(fs_container)
+    result["retained_earnings"] = _extract_retained_earnings(fs_container)
 
     return result
 
@@ -1343,8 +1343,8 @@ def _infer_statement_type(table_el) -> str | None:
     return None
 
 
-def _extract_dividends(container) -> dict | None:
-    """이익잉여금처분계산서에서 배당 정보 추출
+def _extract_retained_earnings(container) -> dict | None:
+    """이익잉여금처분계산서 전체 추출
 
     Returns:
         {"unit": "백만원", "disposal_date": "2026년 3월 26일",
@@ -1380,43 +1380,42 @@ def _extract_dividends(container) -> dict | None:
                 disposal_date = m.group(1)
                 break
 
-        # 배당 관련 행 추출
+        # 전체 행 추출 (헤더/빈 행 제외)
         items = []
         for row in rows:
             cells = row.find_all(['td', 'th'])
             if not cells:
                 continue
             first_cell = re.sub(r'\s+', ' ', cells[0].get_text().strip())
+            if not first_cell:
+                continue
+            # 헤더 행 스킵 (구분/과목/단위)
+            first_clean = re.sub(r'\s+', '', first_cell)
+            if first_clean in ('구분', '과목') or '단위' in first_clean:
+                continue
+            # 처분예정일/확정일 행 스킵 (메타데이터로 이미 추출)
+            if '처분예정일' in first_cell or '처분확정일' in first_cell:
+                continue
 
-            # 배당 키워드가 있는 행
-            if any(kw in first_cell for kw in ['배당금', '중간배당', '현금배당', '주당배당']):
-                values = [c.get_text().strip().replace('\n', ' ') for c in cells]
-                # 비어있지 않은 숫자값 추출
-                nums = [v for v in values[1:] if v and v != '-']
-                current = nums[0] if len(nums) >= 1 else ""
-                prior = nums[1] if len(nums) >= 2 else ""
-                items.append({
-                    "account": first_cell,
-                    "current": current,
-                    "prior": prior,
-                })
-
-            # 미처분이익잉여금, 처분액 등 주요 행
-            if any(kw in first_cell for kw in ['미처분이익잉여금', '처분액', '차기이월']):
-                values = [c.get_text().strip().replace('\n', ' ') for c in cells]
-                nums = [v for v in values[1:] if v and v != '-']
-                current = nums[0] if len(nums) >= 1 else ""
-                prior = nums[1] if len(nums) >= 2 else ""
-                items.append({
-                    "account": first_cell,
-                    "current": current,
-                    "prior": prior,
-                })
+            values = [c.get_text().strip().replace('\n', ' ') for c in cells]
+            nums = [v for v in values[1:] if v and v != '-']
+            current = nums[0] if len(nums) >= 1 else ""
+            prior = nums[1] if len(nums) >= 2 else ""
+            items.append({
+                "account": first_cell,
+                "current": current,
+                "prior": prior,
+            })
 
         if items:
-            # 배당 실시 여부 판단 — 배당금 행에 금액이 있는지
-            div_items = [i for i in items if '배당금' in i['account'] or '현금배당' in i['account']]
-            has_dividend = any(i['current'] and '해당사항' not in i['account'] for i in div_items)
+            # 배당 실시 여부 판단
+            div_items = [i for i in items if any(
+                kw in i['account'] for kw in ['배당금', '현금배당', '중간배당']
+            )]
+            has_dividend = any(
+                i['current'] and '해당사항' not in i['account']
+                for i in div_items
+            )
 
             return {
                 "unit": unit,
@@ -1432,7 +1431,7 @@ def _empty_financial_result() -> dict:
     return {
         "consolidated": {"balance_sheet": None, "income_statement": None},
         "separate": {"balance_sheet": None, "income_statement": None},
-        "dividends": None,
+        "retained_earnings": None,
     }
 
 

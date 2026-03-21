@@ -784,21 +784,21 @@ def _format_financial_statements(result: dict) -> str:
 
             lines.append("")
 
-    # 배당 정보
-    div = result.get("dividends")
-    if div:
-        has_div = div.get("has_dividend", False)
-        lines.append(f"## 배당 {'(실시)' if has_div else '(미실시)'}")
-        if div.get("unit"):
-            lines.append(f"*(단위: {div['unit']})*")
-        if div.get("disposal_date"):
-            lines.append(f"*처분예정일: {div['disposal_date']}*")
+    # 이익잉여금처분계산서
+    re_stmt = result.get("retained_earnings")
+    if re_stmt:
+        has_div = re_stmt.get("has_dividend", False)
+        lines.append(f"## 이익잉여금처분계산서 {'(배당 실시)' if has_div else '(배당 미실시)'}")
+        if re_stmt.get("unit"):
+            lines.append(f"*(단위: {re_stmt['unit']})*")
+        if re_stmt.get("disposal_date"):
+            lines.append(f"*처분예정일: {re_stmt['disposal_date']}*")
         lines.append("")
 
         lines.append("| 항목 | 당기 | 전기 |")
         lines.append("| --- | --- | --- |")
-        for item in div.get("items", []):
-            acct = item["account"].replace("|", "\\|")[:50]
+        for item in re_stmt.get("items", []):
+            acct = item["account"].replace("|", "\\|")[:60]
             lines.append(f"| {acct} | {item['current']} | {item['prior']} |")
         lines.append("")
 
