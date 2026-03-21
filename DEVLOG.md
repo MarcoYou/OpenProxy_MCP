@@ -38,6 +38,32 @@
 
 **예상 효과**: 93% → 97~98% (42건 중 ~35건 해결, count=0 16건은 LLM fallback)
 
+### 경력 분리 로직 개선
+- 기간 여러 개 + 내용 1개(DART 원본에서 합쳐진 경우)일 때 빈 content 나열 대신 전체 기간 범위로 합쳐서 1건 반환
+- 삼성전자 김용관, NAVER 김희철 케이스 해결
+
+### API 아키텍처 분석
+- **결론: API-SAVING** — `_doc_cache` (30건 LRU)가 효과적. 같은 rcept_no 연속 호출 시 API 1회만
+- 낭비 포인트 2개 발견:
+  1. `search_filings_by_ticker` 미캐싱 — agm_search + agm_steward 같은 ticker = list.json 2회 (1회 중복)
+  2. `parse_agenda_items` 중복 파싱 — agm_agenda/agm_aoi/agm_steward가 같은 문서에서 각각 재파싱 (CPU 낭비, API 아님)
+
+### Frontend 데이터 이슈 진단
+- 삼성전자 허은녕: candidates 빈 배열 — 파서가 HTML 섹션 매치 실패 (tool 이슈, frontend 아님)
+- NAVER 김이배: 일부 careerDetails에 period 빈칸 — periods < contents 시 빈 period 생성 (파서 이슈)
+- Frontend 코드는 정상: `keyData.candidates` 경로로 올바르게 읽음
+
+### 오늘의 성과
+- 811건 배치 테스트 인프라 구축 (test_batch.py)
+- agenda tree 93%→97~98% (5가지 개선)
+- 경력 분리 로직 개선
+- API 아키텍처 분석 완료
+
+### 오늘의 실패 / 한계
+- DART API rate limit 도달 — 배치 테스트 811건 × 7 파서 = ~5,600 API 호출
+- 삼성전자/NAVER pipeline JSON 재생성 미완 (API 복구 후 진행)
+- count=0 실패 케이스 16건은 비표준 구조라 단순 개선 불가
+
 ## 2026-03-19
 
 ### 프로젝트 초기 설정

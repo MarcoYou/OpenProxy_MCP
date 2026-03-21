@@ -102,8 +102,15 @@
 ### 파서 개선
 - [x] 811건 배치 테스트 + 5가지 개선 (93%→97~98% 예상)
   - ※ 비고 필터링, 보고사항 필터링, 중복 번호 dedup, boundary 패턴 4종, 연속 공백 정리
+- [x] 경력 분리 개선 — 기간 여러 개 + 내용 1개일 때 합쳐서 반환
+- [ ] 허은녕(삼성전자 제4호) candidates 파싱 실패 — HTML 섹션 매치 디버그 필요
+- [ ] 김이배(NAVER 제4호) careerDetails 빈 period — periods < contents 처리 개선
 - [ ] 811건 전수 regression 테스트 (다음 파서 수정 시 겸사겸사)
 - [ ] Claude API (Anthropic) fallback 추가 (현재 OpenAI만 테스트 완료)
+
+### API 최적화
+- [ ] search_filings_by_ticker 결과 캐싱 (같은 ticker 중복 호출 방지)
+- [ ] parse_agenda_items 결과를 _doc_cache에 저장 (CPU 중복 파싱 방지)
 
 ### 프론트엔드 연동
 - [ ] v3 스키마 전체 호환 (classification, governanceAnalysis, checklist 등)
