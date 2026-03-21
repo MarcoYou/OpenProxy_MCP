@@ -994,12 +994,28 @@ def parse_financial_statements(html: str) -> dict:
         # <p> 헤딩으로 컨텍스트 갱신
         if child.name == 'p' and text:
             text_clean = re.sub(r'\s+', '', text)
-            if _FS_SEPARATE.search(text_clean):
+
+            # 연결/별도 — "별도 및 연결" 처럼 둘 다 있으면 순서 기반 (먼저 나온 쪽)
+            has_cons = bool(_FS_CONSOLIDATED.search(text_clean))
+            has_sepa = bool(_FS_SEPARATE.search(text_clean))
+            if has_cons and has_sepa:
+                # 둘 다 있으면 텍스트에서 먼저 나오는 쪽으로
+                cons_pos = _FS_CONSOLIDATED.search(text_clean).start()
+                sepa_pos = _FS_SEPARATE.search(text_clean).start()
+                is_consolidated = cons_pos < sepa_pos
+            elif has_sepa:
                 is_consolidated = False
-            elif _FS_CONSOLIDATED.search(text_clean) and '별도' not in text_clean:
+            elif has_cons:
                 is_consolidated = True
 
-            if _FS_BALANCE_SHEET.search(text_clean):
+            # 재무제표 유형 — 현금흐름표/자본변동표는 None으로 설정하여 스킵
+            if re.search(r'현금흐름', text_clean):
+                current_stmt_type = None  # 스킵 대상
+            elif re.search(r'자본변동', text_clean):
+                current_stmt_type = None  # 스킵 대상
+            elif re.search(r'이익잉여금처분|결손금처리', text_clean):
+                current_stmt_type = None  # 스킵 대상
+            elif _FS_BALANCE_SHEET.search(text_clean):
                 current_stmt_type = 'balance_sheet'
             elif _FS_INCOME_STMT.search(text_clean):
                 current_stmt_type = 'income_statement'
@@ -1018,11 +1034,12 @@ def parse_financial_statements(html: str) -> dict:
                 elif _FS_CONSOLIDATED.search(table_text):
                     is_consolidated = True
 
-                if _FS_BALANCE_SHEET.search(table_text_clean):
+                if re.search(r'현금흐름|자본변동|이익잉여금처분|결손금처리', table_text_clean):
+                    current_stmt_type = None  # 스킵 대상
+                elif _FS_BALANCE_SHEET.search(table_text_clean):
                     current_stmt_type = 'balance_sheet'
                     # "연결" 없이 단독 "재무상태표" = 별도
                     if not _FS_CONSOLIDATED.search(table_text) and not _FS_SEPARATE.search(table_text):
-                        # 이미 연결 재무상태표가 채워져있으면 → 별도
                         scope_check = "consolidated" if is_consolidated else "separate"
                         if result[scope_check]["balance_sheet"] is not None:
                             is_consolidated = False
@@ -1158,8 +1175,12 @@ def _infer_statement_type(table_el) -> str | None:
         if any('자본금' in h for h in all_headers) and any('잉여금' in h for h in all_headers):
             return None  # 자본변동표 → 스킵
 
-    # 재무상태표: 첫 행들에 "자산" + "유동자산"/"비유동자산"/"현금"
-    if re.search(r'자산', sample) and re.search(r'유동자산|비유동자산|현금|총계', sample):
+    # 현금흐름표 제외: "영업활동", "투자활동", "재무활동"
+    if re.search(r'영업활동|투자활동|재무활동', sample):
+        return None
+
+    # 재무상태표: 첫 행들에 "자산" + "유동자산"/"비유동자산"
+    if re.search(r'자산', sample) and re.search(r'유동자산|비유동자산|총계', sample):
         return 'balance_sheet'
 
     # 손익계산서: "매출" 또는 "영업이익"/"영업손익"
