@@ -4,6 +4,73 @@ import json
 import logging
 import re
 from datetime import datetime
+
+
+def format_krw(raw_value: str, unit: str = "") -> str:
+    """숫자 문자열 + 단위를 사람이 읽기 좋은 한국 원화 형태로 변환
+
+    Args:
+        raw_value: "3,049,040" 또는 "(477,528)" 등
+        unit: "백만원", "천원", "원" 등
+
+    Returns:
+        "약 3.05조원", "약 4,775억원", "3,000만원" 등
+        변환 실패 시 원본 반환
+    """
+    if not raw_value or raw_value.strip() in ('', '-'):
+        return raw_value
+
+    # 음수 감지
+    is_negative = '(' in raw_value or '-' in raw_value.replace(',', '')
+    # 숫자만 추출
+    num_str = re.sub(r'[^\d]', '', raw_value)
+    if not num_str:
+        return raw_value
+
+    value = int(num_str)
+
+    # 단위 반영 → 원 단위로 변환
+    unit_clean = re.sub(r'\s+', '', unit)
+    if '백만' in unit_clean:
+        value *= 1_000_000
+    elif '천' in unit_clean:
+        value *= 1_000
+    # "원"이면 그대로
+
+    if is_negative:
+        value = -value
+
+    return _format_won(value)
+
+
+def _format_won(value: int) -> str:
+    """원 단위 정수를 읽기 좋은 형태로"""
+    abs_val = abs(value)
+    sign = "-" if value < 0 else ""
+
+    if abs_val >= 1_000_000_000_000:  # 조
+        v = abs_val / 1_000_000_000_000
+        if v >= 10:
+            return f"약 {sign}{v:.1f}조원"
+        return f"약 {sign}{v:.2f}조원"
+    elif abs_val >= 100_000_000_000:  # 천억 이상
+        v = abs_val / 100_000_000
+        return f"약 {sign}{v:,.0f}억원"
+    elif abs_val >= 100_000_000:  # 억
+        v = abs_val / 100_000_000
+        if v >= 10:
+            return f"약 {sign}{v:.1f}억원"
+        return f"약 {sign}{v:.2f}억원"
+    elif abs_val >= 10_000_000:  # 천만
+        v = abs_val / 10_000
+        return f"{sign}{v:,.0f}만원"
+    elif abs_val >= 10_000:  # 만
+        v = abs_val / 10_000
+        if v == int(v):
+            return f"{sign}{int(v):,}만원"
+        return f"{sign}{v:,.1f}만원"
+    else:
+        return f"{sign}{abs_val:,}원"
 from open_proxy_mcp.dart.client import DartClient
 from open_proxy_mcp.tools.parser import (
     parse_agenda_items, parse_meeting_info,
