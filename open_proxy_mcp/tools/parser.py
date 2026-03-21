@@ -1161,6 +1161,7 @@ def _extract_candidates(agenda_detail: dict) -> list[dict]:
 
                             if career_details:
                                 c["careerDetails"] = career_details
+                                c["careerCompanyGroups"] = _build_career_company_groups(career_details)
                             elif periods_raw or contents_raw:
                                 c["careerDetails"] = [{"period": periods_raw, "content": contents_raw}]
 
@@ -1223,6 +1224,57 @@ def _extract_candidates(agenda_detail: dict) -> list[dict]:
                     c["recommendationReason"] = reason_text
 
     return candidates
+
+
+def _build_career_company_groups(career_details: list[dict]) -> list[dict]:
+    """careerDetails를 회사명 기준으로 그룹핑
+
+    content에서 회사/기관명과 직책을 분리하여 그룹화.
+    """
+    from collections import OrderedDict
+    groups = OrderedDict()
+
+    for cd in career_details:
+        content = cd.get("content", "")
+        period = cd.get("period", "")
+        if not content:
+            continue
+
+        # 회사명/직책 분리 — 마지막 직책 키워드 앞까지가 회사명
+        company, role = _split_company_role(content)
+
+        if company not in groups:
+            groups[company] = []
+        item = f"{period} {role}".strip() if period else role
+        if item:
+            groups[company].append(item)
+
+    return [{"company": k, "items": v} for k, v in groups.items()]
+
+
+def _split_company_role(content: str) -> tuple[str, str]:
+    """'LG전자 AE사업본부장, 사장' → ('LG전자', 'AE사업본부장, 사장')"""
+    # 직책 키워드 패턴
+    role_patterns = [
+        r'대표이사', r'공동대표이사', r'사장', r'부사장', r'전무', r'상무',
+        r'이사', r'감사', r'회장', r'부회장', r'사외이사', r'비상임이사',
+        r'상근고문', r'교수', r'명예교수', r'초빙교수',
+        r'변호사', r'대표변호사',
+        r'본부장', r'부문장', r'담당장', r'사업부장', r'팀장', r'과장', r'실장',
+        r'자문위원', r'위원', r'위원장',
+    ]
+    pattern = '|'.join(role_patterns)
+
+    # 첫 번째 직책 키워드 위치 찾기
+    m = re.search(pattern, content)
+    if m:
+        company = content[:m.start()].strip().rstrip(',').strip()
+        role = content[m.start():].strip()
+        if company:
+            return company, role
+
+    # 직책 키워드 못 찾으면 전체가 회사명+직책
+    return content, ""
 
 
 def _extract_name_from_title(title: str) -> str | None:
