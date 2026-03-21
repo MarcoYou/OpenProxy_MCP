@@ -1,6 +1,6 @@
 # OPM Blueprint — 현재 구조 + 문제점 + 방향
 
-## 1. 현재 Tool 체계 (10개)
+## 1. 현재 Tool 체계 (10개 + 향후 2개)
 
 ```
 agm_steward(ticker)  ← 오케스트레이터 (한 번에 요약)
@@ -14,10 +14,18 @@ agm_steward(ticker)  ← 오케스트레이터 (한 번에 요약)
 │   │
 │   ├─ agm_financials        재무제표 정규화 (BS/IS/자본변동표/처분계산서)
 │   ├─ agm_personnel         이사/감사 선임·해임 정규화
-│   ├─ agm_aoi               정관변경 정규화
+│   ├─ agm_aoi               정관변경 정규화 (변경전/변경후 비교)
+│   ├─ (향후) agm_proposals  주주제안 정규화 (의안 제목 + 요지)
 │   └─ (향후) agm_ocr        이미지 OCR
 │
 └─ agm_document(rcept_no)    원문 텍스트
+
+안건 유형별 tool 매핑:
+  재무제표 승인 → agm_financials (테이블 정규화)
+  이사/감사 선임·해임 → agm_personnel (후보자 정보)
+  정관변경 → agm_aoi (변경전/변경후 비교)
+  주주제안 → agm_proposals (의안 요지) [향후]
+  보수한도/자사주/기타 → agm_items (raw 블록)
 ```
 
 ## 2. 데이터 흐름
