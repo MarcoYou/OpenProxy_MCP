@@ -505,7 +505,7 @@ def register_tools(mcp):
         rcept_no: str,
         use_llm: bool = False,
         max_fallback_length: int = 3000,
-        format: str = "json",
+        format: str = "md",
     ) -> str:
         """주주총회 소집공고에서 재무제표를 구조화하여 반환합니다.
 
@@ -783,5 +783,22 @@ def _format_financial_statements(result: dict) -> str:
                 lines.append("| " + " | ".join(escaped) + " |")
 
             lines.append("")
+
+    # 배당 정보
+    div = result.get("dividends")
+    if div:
+        lines.append("## 배당")
+        if div.get("unit"):
+            lines.append(f"*(단위: {div['unit']})*")
+        if div.get("disposal_date"):
+            lines.append(f"*처분예정일: {div['disposal_date']}*")
+        lines.append("")
+
+        lines.append("| 항목 | 당기 | 전기 |")
+        lines.append("| --- | --- | --- |")
+        for item in div.get("items", []):
+            acct = item["account"].replace("|", "\\|")[:50]
+            lines.append(f"| {acct} | {item['current']} | {item['prior']} |")
+        lines.append("")
 
     return "\n".join(lines)

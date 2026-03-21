@@ -1298,6 +1298,9 @@ def parse_financial_statements(html: str) -> dict:
             if entry is not None:
                 entry["scope"] = scope
 
+    # 배당 정보 — 이익잉여금처분계산서에서 추출
+    result["dividends"] = _extract_dividends(fs_container)
+
     return result
 
 
@@ -1340,10 +1343,91 @@ def _infer_statement_type(table_el) -> str | None:
     return None
 
 
+def _extract_dividends(container) -> dict | None:
+    """이익잉여금처분계산서에서 배당 정보 추출
+
+    Returns:
+        {"unit": "백만원", "disposal_date": "2026년 3월 26일",
+         "items": [{"account": "배당금", "current": "477,528", "prior": "453,068"}, ...]}
+    """
+    # 이익잉여금처분계산서 테이블 찾기
+    for table in container.find_all('table'):
+        table_text = re.sub(r'\s+', '', table.get_text())
+        if '이익잉여금처분' not in table_text and '미처분이익' not in table_text:
+            continue
+
+        rows = table.find_all('tr')
+        if len(rows) < 3:
+            continue
+
+        # 단위 추출
+        unit = _extract_unit_from_siblings(table)
+        # 테이블 내에서도 확인
+        if not unit:
+            for row in rows[:2]:
+                row_text = row.get_text()
+                m = _FS_UNIT.search(row_text)
+                if m:
+                    unit = m.group(1).strip()
+                    break
+
+        # 처분예정일/확정일
+        disposal_date = None
+        for row in rows[:3]:
+            row_text = row.get_text()
+            m = re.search(r'처분예정일\s*[:：]?\s*(\d{4}년\s*\d{1,2}월\s*\d{1,2}일)', row_text)
+            if m:
+                disposal_date = m.group(1)
+                break
+
+        # 배당 관련 행 추출
+        items = []
+        for row in rows:
+            cells = row.find_all(['td', 'th'])
+            if not cells:
+                continue
+            first_cell = re.sub(r'\s+', ' ', cells[0].get_text().strip())
+
+            # 배당 키워드가 있는 행
+            if any(kw in first_cell for kw in ['배당금', '중간배당', '현금배당', '주당배당']):
+                values = [c.get_text().strip().replace('\n', ' ') for c in cells]
+                # 비어있지 않은 숫자값 추출
+                nums = [v for v in values[1:] if v and v != '-']
+                current = nums[0] if len(nums) >= 1 else ""
+                prior = nums[1] if len(nums) >= 2 else ""
+                items.append({
+                    "account": first_cell,
+                    "current": current,
+                    "prior": prior,
+                })
+
+            # 미처분이익잉여금, 처분액 등 주요 행
+            if any(kw in first_cell for kw in ['미처분이익잉여금', '처분액', '차기이월']):
+                values = [c.get_text().strip().replace('\n', ' ') for c in cells]
+                nums = [v for v in values[1:] if v and v != '-']
+                current = nums[0] if len(nums) >= 1 else ""
+                prior = nums[1] if len(nums) >= 2 else ""
+                items.append({
+                    "account": first_cell,
+                    "current": current,
+                    "prior": prior,
+                })
+
+        if items:
+            return {
+                "unit": unit,
+                "disposal_date": disposal_date,
+                "items": items,
+            }
+
+    return None
+
+
 def _empty_financial_result() -> dict:
     return {
         "consolidated": {"balance_sheet": None, "income_statement": None},
         "separate": {"balance_sheet": None, "income_statement": None},
+        "dividends": None,
     }
 
 
