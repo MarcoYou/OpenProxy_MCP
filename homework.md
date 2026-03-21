@@ -43,6 +43,51 @@
 - [x] 후보자 테이블 제목 분리 (테이블 헤더 경계로 해결)
 - [ ] Claude API (Anthropic) fallback 추가 (현재 OpenAI만 테스트 완료)
 
-### get_agenda_detail 추가 검증/개선
-- [ ] 더 많은 기업으로 테스트 (20개+) — 패턴 변형 발견 시 수정
-- [ ] 안건 트리 ↔ 상세 불일치 케이스 분석 (NAVER 중복 등)
+### agm_items (구 get_agenda_detail) ✓
+- [x] 110건 100% 성공
+- [x] 안건 마커 없는 library fallback (카테고리 제목 사용)
+
+### agm_financials ✓
+- [x] 재무상태표/손익계산서 정규화 (96% 성공)
+- [x] 자본변동표 + 자사주 취득/소각 플래그
+- [x] 이익잉여금처분계산서 + has_dividend 플래그
+- [x] 연결/별도 자동 분류
+- [x] 컬럼 정규화 (4/5/6컬럼 → 통일)
+- [x] format_krw() 단위 변환 유틸
+
+### agm_personnel ✓
+- [x] 이사/감사/감사위원 선임·해임 정규화
+- [x] v3 스키마 호환 (camelCase 키명)
+- [x] 세부경력 기간/내용 분리 (careerDetails)
+- [x] 결격사유 3필드 분리 (eligibility)
+- [x] 직무수행계획/추천사유 전문 반환
+- [x] 확인서 텍스트 자동 제거
+- [x] 41건 테스트 에러 0건
+
+### agm_steward ✓
+- [x] 종합 오케스트레이터 (info + agenda + financials highlights + personnel summary)
+
+### agm_corrections ✓
+- [x] 정정 전/후 비교 + 메타데이터
+
+## 해야 할 일
+
+### agm_personnel 개선
+- [ ] careerCompanyGroups 회사명 분리 정확도 개선 (부서명이 회사명에 포함되는 이슈)
+
+### 이미지 인덱싱 + OCR 파이프라인
+- [ ] parse_agenda_details에서 이미지 메타데이터 인덱싱 (파일명, 위치, 카테고리)
+  - BSM → `{"type": "image", "category": "bsm"}`, 확인서 → 스킵
+- [ ] ZIP 내 이미지 바이너리 추출 (client.py)
+- [ ] Tesseract + EasyOCR 벤치마크 (KT&G BSM으로)
+- [ ] 별도 OCR tool → 결과를 agenda detail에 병합
+
+### 기업 검색 개선
+- [ ] 영문 브랜드명(KT&G 등) → corp_code 매핑 지원 (별칭 또는 영문명 API)
+
+### 파서 개선
+- [ ] Claude API (Anthropic) fallback 추가 (현재 OpenAI만 테스트 완료)
+
+### 프론트엔드 연동
+- [ ] v3 스키마 전체 호환 (classification, governanceAnalysis, checklist 등)
+- [ ] OpenProxy 프론트엔드에 JSON 연결
