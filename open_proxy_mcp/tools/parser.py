@@ -1163,9 +1163,20 @@ def _extract_candidates(agenda_detail: dict) -> list[dict]:
 
                             # 기간 패턴 분리: "2021~현재 2022~2024" → ["2021~현재", "2022~2024"]
                             periods = re.findall(r'\d{4}\s*~\s*(?:현재|\d{4})', periods_raw)
-                            # 내용 패턴 분리: "現) ... 前) ..." 또는 줄바꿈
-                            contents = re.split(r'(?=(?:現|前|현|전)\)\s)', contents_raw)
-                            contents = [re.sub(r'^(?:現|前|현|전)\)\s*', '', x).strip() for x in contents if x.strip()]
+                            # 내용 패턴 분리: "現) ..." / "前) ..." / "- (주)회사명..."
+                            if re.search(r'(?:現|前|현|전)\)', contents_raw):
+                                contents = re.split(r'(?=(?:現|前|현|전)\)\s)', contents_raw)
+                                contents = [re.sub(r'^(?:現|前|현|전)\)\s*', '', x).strip() for x in contents if x.strip()]
+                            elif re.search(r'-\s*\(', contents_raw):
+                                # "- (주)LG화학 CEO... - (주)LG화학 부사장..." 패턴
+                                contents = re.split(r'(?=-\s*\()', contents_raw)
+                                contents = [re.sub(r'^-\s*', '', x).strip() for x in contents if x.strip()]
+                            elif re.search(r'-\s*[가-힣]', contents_raw):
+                                # "- 서울대학교 교수- 서울대학교 부교수..." 패턴
+                                contents = re.split(r'(?=-\s*[가-힣])', contents_raw)
+                                contents = [re.sub(r'^-\s*', '', x).strip() for x in contents if x.strip()]
+                            else:
+                                contents = [contents_raw.strip()] if contents_raw.strip() else []
 
                             career_details = []
                             for i in range(max(len(periods), len(contents))):
