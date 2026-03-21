@@ -697,7 +697,7 @@ def register_tools(mcp):
         return _format_correction_details(result)
 
     @mcp.tool()
-    async def agm_sherlock(
+    async def agm_steward(
         ticker: str,
         bgn_de: str = "",
         end_de: str = "",
@@ -766,7 +766,7 @@ def register_tools(mcp):
         # 포매팅
         corp_name = corp_info.get('corp_name', ticker)
         lines = [
-            f"# {corp_name} 주주총회 Sherlock Report",
+            f"# {corp_name} 주주총회 Steward Report",
             "",
         ]
 
