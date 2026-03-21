@@ -1411,6 +1411,7 @@ def parse_aoi(html: str) -> dict:
                 after_idx = next((i for i, h in enumerate(headers_clean) if '변경후' in h or '개정' in h), 2)
                 reason_idx = next((i for i, h in enumerate(headers_clean) if '목적' in h or '사유' in h), 3)
 
+                last_sub_id = ""
                 for row in rows[1:]:
                     if not row or not row[0].strip():
                         continue
@@ -1423,6 +1424,7 @@ def parse_aoi(html: str) -> dict:
                     if m:
                         sub_id = m.group(1)
                         label = m.group(2).strip()
+                        last_sub_id = sub_id
                     else:
                         sub_id = ""
                         label = col0
@@ -1439,14 +1441,27 @@ def parse_aoi(html: str) -> dict:
                             clause = clause_m.group(1)
                             break
 
-                    amendments.append({
-                        "subAgendaId": sub_id,
-                        "label": label,
-                        "clause": clause,
-                        "before": before,
-                        "after": after,
-                        "reason": reason,
-                    })
+                    # 세부의안 번호 없는 행 → 직전 세부의안에 병합
+                    if not sub_id and last_sub_id and amendments:
+                        # 직전 세부의안 찾아서 clauses 리스트에 추가
+                        last = amendments[-1]
+                        if "additionalClauses" not in last:
+                            last["additionalClauses"] = []
+                        last["additionalClauses"].append({
+                            "clause": clause,
+                            "before": before,
+                            "after": after,
+                            "reason": reason,
+                        })
+                    else:
+                        amendments.append({
+                            "subAgendaId": sub_id,
+                            "label": label,
+                            "clause": clause,
+                            "before": before,
+                            "after": after,
+                            "reason": reason,
+                        })
 
     summary = {
         "totalAmendments": len(amendments),
