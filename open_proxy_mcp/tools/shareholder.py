@@ -950,14 +950,14 @@ def _format_personnel(result: dict) -> str:
 
         for c in a.get("candidates", []):
             lines.append(f"- **{c.get('name', '?')}**")
-            if c.get("birth_date"):
-                lines.append(f"  - 생년월일: {c['birth_date']}")
-            if c.get("position_type"):
-                lines.append(f"  - 직위: {c['position_type']}")
+            if c.get("birthDate"):
+                lines.append(f"  - 생년월일: {c['birthDate']}")
+            if c.get("roleType"):
+                lines.append(f"  - 직위: {c['roleType']}")
             if c.get("recommender"):
                 lines.append(f"  - 추천인: {c['recommender']}")
-            if c.get("relationship_with_major_shareholder"):
-                lines.append(f"  - 최대주주 관계: {c['relationship_with_major_shareholder']}")
+            if c.get("majorShareholderRelation"):
+                lines.append(f"  - 최대주주 관계: {c['majorShareholderRelation']}")
             if c.get("mainJob"):
                 lines.append(f"  - 주요경력: {c['mainJob']}")
             if c.get("careerDetails"):

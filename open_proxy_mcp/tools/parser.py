@@ -1034,7 +1034,7 @@ def parse_personnel(html: str) -> dict:
         if not candidates:
             name = _extract_name_from_title(title)
             if name:
-                candidates = [{"name": name, "position_type": category}]
+                candidates = [{"name": name, "roleType": category}]
 
         appointment = {
             "number": number,
@@ -1084,13 +1084,13 @@ def _extract_candidates(agenda_detail: dict) -> list[dict]:
                         h = re.sub(r'\s+', '', header)
                         val = row[ci].strip()
                         if '생년월일' in h:
-                            candidate["birth_date"] = val
+                            candidate["birthDate"] = val
                         elif '사외이사' in h and '후보' in h:
-                            candidate["position_type"] = val if val else None
+                            candidate["roleType"] = val if val else None
                         elif '분리선출' in h:
-                            candidate["separate_election"] = val
+                            candidate["separateElection"] = val
                         elif '최대주주' in h:
-                            candidate["relationship_with_major_shareholder"] = val
+                            candidate["majorShareholderRelation"] = val
                         elif '추천인' in h:
                             candidate["recommender"] = val
 
@@ -1138,7 +1138,7 @@ def _extract_candidates(agenda_detail: dict) -> list[dict]:
                                 h = re.sub(r'\s+', '', header)
                                 val = row[ci].strip()
                                 if '주된직업' in h:
-                                    c["mainJob"] = val
+                                    c["mainJob"] = re.sub(r'^\(?\s*(?:現|現|현)\)?\s*', '', val).strip()
                                 elif '거래내역' in h:
                                     c["recent3yTransactions"] = val if val and val != '없음' else None
 
