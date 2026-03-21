@@ -361,6 +361,7 @@ def register_tools(mcp):
     async def agm_agenda(
         rcept_no: str,
         use_llm: bool = False,
+        max_fallback_length: int = 3000,
         format: str = "md",
     ) -> str:
         """주주총회 소집공고에서 의안(안건) 목록을 구조화하여 반환합니다.
@@ -371,6 +372,7 @@ def register_tools(mcp):
         Args:
             rcept_no: 접수번호 (예: 20260225000123)
             use_llm: True면 파싱 실패/의심 시 LLM fallback 사용 (기본: False)
+            max_fallback_length: LLM fallback 시 원문 최대 글자 수 (기본 3000, 0이면 제한 없음)
             format: 반환 형식. "md" (마크다운, 기본) 또는 "json" (프론트엔드용)
         """
         doc = await _get_document_cached(rcept_no)
@@ -390,6 +392,8 @@ def register_tools(mcp):
 
             logger.warning(f"[SOFT FAIL] 정규식 파싱 의심 — LLM fallback 시도: {rcept_no}")
             zone_clean = re.sub(r'\n+', ' ', zone)
+            if max_fallback_length > 0:
+                zone_clean = zone_clean[:max_fallback_length]
             agenda = await extract_agenda_with_llm(zone_clean)
             parse_method = "llm"
 
@@ -477,6 +481,7 @@ def register_tools(mcp):
     async def agm_financials(
         rcept_no: str,
         use_llm: bool = False,
+        max_fallback_length: int = 3000,
         format: str = "json",
     ) -> str:
         """주주총회 소집공고에서 재무제표를 구조화하여 반환합니다.
@@ -487,6 +492,7 @@ def register_tools(mcp):
         Args:
             rcept_no: 접수번호 (예: 20260225000123)
             use_llm: True면 파싱 실패 시 LLM fallback 사용 (기본: False)
+            max_fallback_length: LLM fallback 시 원문 최대 글자 수 (기본 3000, 0이면 제한 없음)
             format: 반환 형식. "json" (기본, 구조화) 또는 "md" (마크다운 테이블)
         """
         doc = await _get_document_cached(rcept_no)
@@ -542,12 +548,14 @@ def register_tools(mcp):
                         fs_text = ""
                         for a in fs_agenda:
                             fs_text += f"{a.get('title', '')}\n"
-                        # 본문에서 재무 관련 부분 추출 (최대 3000자)
-                        import re as _re
-                        fs_match = _re.search(r'재무상태표|대차대조표', text)
+                        # 본문에서 재무 관련 부분 추출
+                        fs_match = re.search(r'재무상태표|대차대조표', text)
                         if fs_match:
-                            fs_text = text[fs_match.start():fs_match.start()+3000]
-                        return f"[LLM fallback] 재무제표 파싱에 실패하여 원문 일부를 반환합니다:\n\n{fs_text}"
+                            if max_fallback_length > 0:
+                                fs_text = text[fs_match.start():fs_match.start()+max_fallback_length]
+                            else:
+                                fs_text = text[fs_match.start():]
+                        return f"[LLM fallback] 재무제표 파싱에 실패하여 원문을 반환합니다:\n\n{fs_text}"
                     except Exception as e:
                         logger.error(f"[HARD FAIL] LLM fallback도 실패: {rcept_no} — {e}")
                 return "재무제표 승인 안건이 있으나 파싱에 실패했습니다. (비표준 문서 구조)"
