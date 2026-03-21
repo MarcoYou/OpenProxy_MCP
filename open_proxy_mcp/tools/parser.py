@@ -1109,15 +1109,25 @@ def _extract_candidates(agenda_detail: dict) -> list[dict]:
                     if not row or not row[0].strip():
                         continue
                     name = row[0].strip()
-                    # 기존 후보자에 매칭
                     for c in candidates:
                         if c["name"] == name:
                             for ci, header in enumerate(headers):
                                 if ci >= len(row):
                                     break
                                 h = re.sub(r'\s+', '', header)
+                                val = row[ci].strip()
                                 if '주된직업' in h:
-                                    c["main_career"] = row[ci].strip()
+                                    c["main_career"] = val
+                                elif '세부경력' in h or '내용' in h:
+                                    c.setdefault("career_detail", [])
+                                    if val:
+                                        c["career_detail"].append(val)
+                                elif '기간' in h:
+                                    c.setdefault("career_periods", [])
+                                    if val:
+                                        c["career_periods"].append(val)
+                                elif '거래내역' in h:
+                                    c["transaction_history"] = val
 
         # 다. 체납사실 — 기존 후보자에 매칭
         if heading.startswith("다.") or '체납' in heading:
@@ -1136,6 +1146,29 @@ def _extract_candidates(agenda_detail: dict) -> list[dict]:
                             c["disqualification"] = "해당사항 없음" if any(
                                 '해당' in cell and '없' in cell for cell in row[1:]
                             ) else " / ".join(cell.strip() for cell in row[1:] if cell.strip())
+
+        # 라. 직무수행계획 — 텍스트 블록
+        if heading.startswith("라.") or '직무수행' in heading:
+            texts = []
+            for block in sec.get("blocks", []):
+                if block["type"] == "text" and block["content"].strip():
+                    texts.append(block["content"].strip())
+            if texts and candidates:
+                # 마지막 후보자 또는 전체에 할당
+                plan_text = "\n".join(texts)
+                for c in candidates:
+                    c["duty_plan"] = plan_text
+
+        # 마. 추천 사유 — 텍스트 블록
+        if heading.startswith("마.") or '추천' in heading:
+            texts = []
+            for block in sec.get("blocks", []):
+                if block["type"] == "text" and block["content"].strip():
+                    texts.append(block["content"].strip())
+            if texts and candidates:
+                reason_text = "\n".join(texts)
+                for c in candidates:
+                    c["recommendation_reason"] = reason_text
 
     return candidates
 

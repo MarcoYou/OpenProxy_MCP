@@ -956,10 +956,22 @@ def _format_personnel(result: dict) -> str:
                 lines.append(f"  - 직위: {c['position_type']}")
             if c.get("recommender"):
                 lines.append(f"  - 추천인: {c['recommender']}")
+            if c.get("relationship_with_major_shareholder"):
+                lines.append(f"  - 최대주주 관계: {c['relationship_with_major_shareholder']}")
             if c.get("main_career"):
                 lines.append(f"  - 주요경력: {c['main_career']}")
+            if c.get("career_detail"):
+                lines.append(f"  - 세부경력:")
+                for detail in c["career_detail"]:
+                    lines.append(f"    - {detail[:80]}")
+            if c.get("transaction_history"):
+                lines.append(f"  - 법인 거래내역: {c['transaction_history']}")
             if c.get("disqualification"):
                 lines.append(f"  - 결격사유: {c['disqualification']}")
+            if c.get("duty_plan"):
+                lines.append(f"  - 직무수행계획: {c['duty_plan'][:200]}...")
+            if c.get("recommendation_reason"):
+                lines.append(f"  - 추천사유: {c['recommendation_reason'][:200]}...")
         lines.append("")
 
     return "\n".join(lines)
