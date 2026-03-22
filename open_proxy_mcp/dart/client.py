@@ -27,16 +27,32 @@ class DartClient:
     """OpenDART API 호출 래퍼
 
     하는 일:
-    - API 키를 .env에서 읽어서 자동으로 붙임
+    - API 키를 .env에서 읽어서 자동으로 붙임 (속도 제한 시 보조 키로 자동 전환)
     - 요청 보내고 JSON 파싱
     - 에러 상태(status != "000")면 예외 발생
     - 종목코드/회사명 → corp_code 변환 (corpCode.xml 캐싱)
     """
 
     def __init__(self):
-        self.api_key = os.getenv("OPENDART_API_KEY")
-        if not self.api_key:
+        self._api_keys = []
+        primary = os.getenv("OPENDART_API_KEY")
+        if primary:
+            self._api_keys.append(primary)
+        secondary = os.getenv("OPENDART_API_KEY_2")
+        if secondary:
+            self._api_keys.append(secondary)
+        if not self._api_keys:
             raise ValueError("OPENDART_API_KEY가 .env에 설정되어 있지 않습니다.")
+        self._key_index = 0
+        self.api_key = self._api_keys[0]
+
+    def _rotate_key(self) -> bool:
+        """다음 API 키로 전환. 전환 가능하면 True, 더 없으면 False."""
+        if len(self._api_keys) <= 1:
+            return False
+        self._key_index = (self._key_index + 1) % len(self._api_keys)
+        self.api_key = self._api_keys[self._key_index]
+        return True
 
     async def _request(self, endpoint: str, params: dict) -> dict:
         """공통 API 호출 메서드 (JSON 응답용)
@@ -59,19 +75,39 @@ class DartClient:
         # DART API는 status "000"이 정상
         status = data.get("status", "")
         if status != "000":
+            # 속도 제한("020") 등 일시적 에러 시 보조 키로 재시도
+            if self._rotate_key():
+                params["crtfc_key"] = self.api_key
+                async with httpx.AsyncClient() as http:
+                    response = await http.get(url, params=params, timeout=30)
+                    response.raise_for_status()
+                    data = response.json()
+                status = data.get("status", "")
+                if status == "000":
+                    return data
             message = data.get("message", "알 수 없는 에러")
             raise DartClientError(status, message)
 
         return data
 
     async def _request_binary(self, endpoint: str, params: dict) -> bytes:
-        """공통 API 호출 메서드 (바이너리 응답용 — ZIP 등)"""
+        """공통 API 호출 메서드 (바이너리 응답용 — ZIP 등)
+
+        속도 제한으로 비정상 응답(HTML 에러 페이지) 수신 시 보조 키로 자동 전환 후 재시도.
+        """
         params["crtfc_key"] = self.api_key
         url = f"{OPENDART_BASE_URL}/{endpoint}"
 
         async with httpx.AsyncClient() as http:
             response = await http.get(url, params=params, timeout=60)
             response.raise_for_status()
+
+        # ZIP 파일은 PK 시그니처(50 4B)로 시작. 아니면 속도 제한 에러 페이지.
+        if response.content[:2] != b'PK' and self._rotate_key():
+            params["crtfc_key"] = self.api_key
+            async with httpx.AsyncClient() as http:
+                response = await http.get(url, params=params, timeout=60)
+                response.raise_for_status()
 
         return response.content
 
