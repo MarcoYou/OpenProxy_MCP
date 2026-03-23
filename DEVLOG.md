@@ -133,10 +133,10 @@
 
 ### 문서화
 - README.md, CLAUDE.md, DEVLOG.md, references.md 작성
-- homework.md 작성 (미완료 작업 추적)
+- TO_DO.md 작성 (미완료 작업 추적)
 - 개발 방식 확정: Build → Check → Pass 점진적 사이클
 
-### 다음 단계 → homework.md 참조
+### 다음 단계 → TO_DO.md 참조
 
 ## 2026-03-20
 
