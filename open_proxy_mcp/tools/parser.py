@@ -1146,14 +1146,19 @@ def _parse_period_raw(period_raw: str) -> list[str]:
     # 전처리: 現→현재, ~현→~현재, 아포스트로피
     period_raw = re.sub(r'現', '현재', period_raw)
     period_raw = re.sub(r'[-~]\s*현(?!재)', '~현재', period_raw)
+    # YYYY.MM~ 또는 YYYY~ (종료일 없이 끝남) → ~현재
+    period_raw = re.sub(r'(\d{4}(?:\.\d{1,2})?)~(?=\d{4}[^.]|\s|$)', r'\1~현재 ', period_raw)
     period_raw = re.sub(r'(현재)(\d)', r'\1 \2', period_raw)
     period_raw = re.sub(r"[''`](\d{2})", lambda m: f"20{m.group(1)}" if int(m.group(1)) <= 30 else f"19{m.group(1)}", period_raw)
-    # 붙어있는 4자리 연도 분리
+    # 붙어있는 연도 분리: YYYY.MMYYYY → YYYY.MM YYYY, YYYYYYYY → YYYY YYYY
+    period_raw = re.sub(r'(\d{4}\.\d{1,2})(\d{4})', r'\1 \2', period_raw)
     period_raw = re.sub(r'(\d{4})(\d{4})', r'\1 \2', period_raw)
     period_raw = re.sub(r'(\d{4})(\d{4})', r'\1 \2', period_raw)
 
-    # 1차: 4자리 연도 매치 (~와 - 모두 기간 구분자로 인식)
-    periods = re.findall(r'\d{4}\s*[-~]\s*(?:현재|\d{4})|\d{4}', period_raw)
+    # 1차: YYYY.MM 또는 YYYY 매치 (~와 - 모두 기간 구분자)
+    # YYYY.MM~YYYY.MM, YYYY.MM~현재, YYYY~YYYY, YYYY~현재, 단독 YYYY.MM, 단독 YYYY
+    _YMD = r'\d{4}(?:\.\d{1,2}(?:\.\d{1,2})?)?'  # YYYY or YYYY.MM or YYYY.MM.DD
+    periods = re.findall(rf'{_YMD}\s*[-~]\s*(?:현재|{_YMD})|{_YMD}', period_raw)
 
     # 4자리 매치가 전부 비정상 연도면 무효화 → 2자리로 재시도
     if periods:
