@@ -104,7 +104,7 @@
   - ※ 비고 필터링, 보고사항 필터링, 중복 번호 dedup, boundary 패턴 4종, 연속 공백 정리
 - [x] 경력 분리 개선 — 기간 여러 개 + 내용 1개일 때 합쳐서 반환
 - [x] 허은녕(삼성전자 제4호) candidates 파싱 실패 — SPAN 분리 시 제목 줄바꿈 합침 수정
-- [ ] 김이배(NAVER 제4호) careerDetails 빈 period — periods < contents 처리 개선
+- [x] 김이배(NAVER 제4호) careerDetails 빈 period — 단독연도 감지 + 내용 분리 통합 패턴 수정
 - [ ] 811건 전수 regression 테스트 (다음 파서 수정 시 겸사겸사)
 - [ ] Claude API (Anthropic) fallback 추가 (현재 OpenAI만 테스트 완료)
 
