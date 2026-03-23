@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from open_proxy_mcp.dart.client import DartClient
 from open_proxy_mcp.tools.parser import (
     parse_agenda_items,
+    validate_agenda_result,
     parse_meeting_info,
     parse_financial_statements,
     parse_personnel,
@@ -322,6 +323,49 @@ def _update_financials(agenda: dict, fin_result: dict):
         kd["financialStatements"] = _snake_to_camel(fin_result)
 
 
+def _compute_analysis_status(parsed_items, fin, pers, aoi) -> str:
+    """분석 상태 판정: 정상 / 검토 필요 / 실패"""
+    if not parsed_items or not validate_agenda_result(parsed_items):
+        return "실패"
+
+    issues = 0
+
+    # 재무 안건이 있는데 데이터가 없으면
+    has_fin_agenda = any("재무" in item.get("title", "") or "대차" in item.get("title", "") for item in parsed_items)
+    has_fin_data = bool(
+        (fin.get("consolidated") or {}).get("balance_sheet", {}).get("rows")
+        or (fin.get("separate") or {}).get("balance_sheet", {}).get("rows")
+    )
+    if has_fin_agenda and not has_fin_data:
+        issues += 1
+
+    # 선임 안건이 있는데 후보자가 없으면
+    has_pers_agenda = any(
+        kw in item.get("title", "") for item in parsed_items for kw in ("선임", "해임")
+    )
+    has_pers_data = any(
+        len(a.get("candidates", [])) > 0 for a in pers.get("appointments", [])
+    )
+    if has_pers_agenda and not has_pers_data:
+        issues += 1
+
+    # 정관 안건이 있는데 amendments가 없으면
+    has_aoi_agenda = any("정관" in item.get("title", "") for item in parsed_items)
+    has_aoi_data = len(aoi.get("amendments", [])) > 0
+    if has_aoi_agenda and not has_aoi_data:
+        issues += 1
+
+    # 경력 이슈 (content > 100자)
+    for a in pers.get("appointments", []):
+        for c in a.get("candidates", []):
+            for cd in c.get("careerDetails", []):
+                if len(cd.get("content", "")) > 100:
+                    issues += 1
+                    break
+
+    return "정상" if issues == 0 else "검토 필요"
+
+
 def _build_new_json(name, ticker, rcept_no, parsed_items, meeting_info, fin, pers, aoi):
     """파서 결과로 v3 pipeline JSON 골격 생성"""
     def _build_agenda(item, parent_id=None):
@@ -415,7 +459,12 @@ async def process_company(client: DartClient, name: str, ticker: str, json_file:
         print(f"  SKIP {name}: 소집공고 없음", flush=True)
         return
 
-    rcept_no = filings[0]["rcept_no"]
+    latest = filings[0]
+    rcept_no = latest["rcept_no"]
+    rcept_dt = latest.get("rcept_dt", "")  # YYYYMMDD
+    is_correction = "정정" in latest.get("report_nm", "")
+    # 공고일 포맷: YYYYMMDD → YYYY-MM-DD
+    notice_date = f"{rcept_dt[:4]}-{rcept_dt[4:6]}-{rcept_dt[6:8]}" if len(rcept_dt) == 8 else None
     await asyncio.sleep(1.5)
 
     # 문서 가져오기
@@ -435,10 +484,8 @@ async def process_company(client: DartClient, name: str, ticker: str, json_file:
     ] if parsed_items else None)
 
     if is_new:
-        # 새 JSON 생성
         data = _build_new_json(name, ticker, rcept_no, parsed_items, meeting_info, fin, pers, aoi)
     else:
-        # 기존 JSON 업데이트
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         data["meetingInfo"]["stockCode"] = ticker
@@ -451,6 +498,13 @@ async def process_company(client: DartClient, name: str, ticker: str, json_file:
             _update_candidates(agenda, pers)
             _update_charter_changes(agenda, aoi, parsed_items)
             _update_financials(agenda, fin)
+
+    # 공고일/정정 여부
+    data["meetingInfo"]["noticeDate"] = notice_date
+    data["meetingInfo"]["isCorrected"] = is_correction
+
+    # 분석 상태: 정상 / 검토 필요 / 실패
+    data["analysisStatus"] = _compute_analysis_status(parsed_items, fin, pers, aoi)
 
     # 저장
     with open(json_path, "w", encoding="utf-8") as f:
