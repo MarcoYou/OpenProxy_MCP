@@ -93,7 +93,9 @@ class DartClient:
     async def _request_binary(self, endpoint: str, params: dict) -> bytes:
         """공통 API 호출 메서드 (바이너리 응답용 — ZIP 등)
 
-        속도 제한으로 비정상 응답(HTML 에러 페이지) 수신 시 보조 키로 자동 전환 후 재시도.
+        비정상 응답(XML 에러) 수신 시:
+        1. XML 에러면 DartClientError 발생 (접수번호 오류 등)
+        2. ZIP도 XML도 아니면 보조 키로 전환 후 재시도
         """
         params["crtfc_key"] = self.api_key
         url = f"{OPENDART_BASE_URL}/{endpoint}"
@@ -102,14 +104,35 @@ class DartClient:
             response = await http.get(url, params=params, timeout=60)
             response.raise_for_status()
 
-        # ZIP 파일은 PK 시그니처(50 4B)로 시작. 아니면 속도 제한 에러 페이지.
-        if response.content[:2] != b'PK' and self._rotate_key():
+        content = response.content
+
+        # ZIP 파일은 PK 시그니처(50 4B)로 시작
+        if content[:2] == b'PK':
+            return content
+
+        # XML 에러 응답 체크 (접수번호 오류, 한도 초과 등)
+        if content[:5] == b'<?xml':
+            import re
+            status_m = re.search(r'<status>(\d+)</status>', content.decode('utf-8', errors='replace'))
+            msg_m = re.search(r'<message>(.+?)</message>', content.decode('utf-8', errors='replace'))
+            if status_m:
+                raise DartClientError(status_m.group(1), msg_m.group(1) if msg_m else "알 수 없는 에러")
+
+        # ZIP도 XML도 아닌 비정상 응답 → 보조 키로 재시도
+        if self._rotate_key():
             params["crtfc_key"] = self.api_key
             async with httpx.AsyncClient() as http:
                 response = await http.get(url, params=params, timeout=60)
                 response.raise_for_status()
+            content = response.content
+            if content[:5] == b'<?xml':
+                import re
+                status_m = re.search(r'<status>(\d+)</status>', content.decode('utf-8', errors='replace'))
+                msg_m = re.search(r'<message>(.+?)</message>', content.decode('utf-8', errors='replace'))
+                if status_m:
+                    raise DartClientError(status_m.group(1), msg_m.group(1) if msg_m else "알 수 없는 에러")
 
-        return response.content
+        return content
 
     # ── 기업 코드 매핑 ──
 
