@@ -255,22 +255,42 @@ def _match_agenda(agenda: dict, parsed_number: str) -> bool:
 
 def _update_candidates(agenda: dict, personnel_result: dict):
     """personnel 파서 결과를 agenda.keyData.candidates에 반영"""
+    import re as _re
     kd = agenda.get("keyData", {})
     title = agenda.get("title", "")
     label = agenda.get("agendaLabel", "")
 
-    # 선임/해임 안건인지 확인
     if not any(kw in title for kw in ("선임", "해임", "중임", "연임", "재선임")):
         return
 
+    # 제목에서 후보자 이름 추출 (후보: 이름, 이름 선임의 건)
+    title_names = set(_re.findall(r'(?:후보\s*[:：]?\s*|이사\s+|감사\s+)([가-힣]{2,4})', title))
+
+    # 1차: 번호 정확 매치
+    for appt in personnel_result.get("appointments", []):
+        if appt.get("number") and appt["number"] == label:
+            cands = appt.get("candidates", [])
+            if cands:
+                kd["candidates"] = cands
+                return
+
+    # 2차: 제목에 후보자 이름이 있으면 그 이름이 candidates에 포함된 appt 매칭
+    if title_names:
+        for appt in personnel_result.get("appointments", []):
+            cands = appt.get("candidates", [])
+            cand_names = {c.get("name", "") for c in cands}
+            if title_names & cand_names:
+                # 이름 일치하는 후보자만 필터링
+                matched_cands = [c for c in cands if c.get("name") in title_names]
+                if matched_cands:
+                    kd["candidates"] = matched_cands
+                    return
+
+    # 3차: 카테고리 키워드 매칭 (이름 없는 일반 안건)
     for appt in personnel_result.get("appointments", []):
         appt_title = appt.get("title", "")
-        appt_number = appt.get("number", "")
-        # 매칭: 번호 일치 or 제목 일치 or 제목 키워드 포함
         matched = False
-        if appt_number and appt_number == label:
-            matched = True
-        elif appt_title == title:
+        if appt_title == title:
             matched = True
         elif appt_title and appt_title in title:
             matched = True
