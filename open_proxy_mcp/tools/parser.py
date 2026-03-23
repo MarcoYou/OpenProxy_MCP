@@ -1086,7 +1086,7 @@ def _extract_career_from_html(html: str, candidate_name: str) -> list[dict] | No
             content_td = None
             for i, td in enumerate(tds):
                 td_text = td.get_text(strip=True)
-                if re.search(r'\d{2,4}\s*~', td_text):
+                if re.search(r'\d{2,4}\s*(?:년\s*\d{1,2}\s*월\s*)?[-~]', td_text):
                     period_td = td
                     if i + 1 < len(tds):
                         content_td = tds[i + 1]
@@ -1143,7 +1143,9 @@ def _parse_period_raw(period_raw: str) -> list[str]:
 
     4자리 연도 우선, 0개면 2자리 연도(YY~YY) 시도.
     """
-    # 전처리: 現→현재, ~현→~현재, 아포스트로피
+    # 전처리
+    # YYYY년 M월 → YYYY.MM
+    period_raw = re.sub(r'(\d{4})년\s*(\d{1,2})월', r'\1.\2', period_raw)
     period_raw = re.sub(r'現', '현재', period_raw)
     period_raw = re.sub(r'[-~]\s*현(?!재)', '~현재', period_raw)
     # YYYY.MM~ 또는 YYYY~ (종료일 없이 끝남) → ~현재
