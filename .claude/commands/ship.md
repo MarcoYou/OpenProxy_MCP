@@ -7,7 +7,9 @@
    - 적절한 커밋 메시지 작성 (한국어, 컨벤션: feat/fix/docs/chore)
    - `Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>` 포함
    - git add → commit → push
-3. OpenProxy 서브모듈 변경 있으면 서브모듈 먼저 커밋/푸시, 부모 레포에서 서브모듈 포인터 업데이트
+3. OpenProxy 서브모듈 변경 있으면:
+   - `cd OpenProxy` → 서브모듈 커밋/푸시
+   - **반드시 `cd /Users/marcoyou/Projects/open-proxy-mcp`로 돌아온 후** 부모 레포에서 `git add OpenProxy` → 커밋/푸시
 4. `DEVLOG.md` 업데이트:
    - 오늘 날짜 섹션 없으면 생성
    - 방금 한 작업 내용 추가 (이미 기록된 내용은 중복 안 함)
