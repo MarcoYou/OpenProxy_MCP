@@ -441,6 +441,8 @@ async def process_company(client: DartClient, name: str, ticker: str, json_file:
         # 기존 JSON 업데이트
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
+        data["meetingInfo"]["stockCode"] = ticker
+        data["meetingInfo"]["companyName"] = name
         if meeting_info.get("datetime"):
             data["meetingInfo"]["meetingDateTime"] = meeting_info.get("datetime", "")
             data["meetingInfo"]["meetingLocation"] = meeting_info.get("location", "")
