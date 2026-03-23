@@ -1053,12 +1053,12 @@ _CATEGORY_MAP = [
 
 
 def _extract_career_from_html(html: str, candidate_name: str) -> list[dict] | None:
-    """HTML에서 후보자의 경력 <p> 태그를 직접 파싱하여 period/content 쌍 반환
+    """HTML에서 후보자의 경력을 bs4로 직접 파싱 (1단계)
 
-    마크다운 테이블 변환 시 <p> 구분이 사라지는 문제의 fallback.
-    경력 테이블의 <td> 안 <p> 태그들을 기간/내용 컬럼별로 추출합니다.
+    <table> 안 <td>의 <p> 태그로 기간/내용을 분리합니다.
+    <p> 구분이 없거나 기간 패턴이 없으면 None 반환 → regex fallback으로.
     """
-    soup = BeautifulSoup(html, 'lxml')
+    soup = BeautifulSoup(html, _BS4_PARSER)
     for table in soup.find_all('table'):
         table_text = table.get_text()
         if candidate_name not in table_text:
@@ -1068,18 +1068,15 @@ def _extract_career_from_html(html: str, candidate_name: str) -> list[dict] | No
 
         for tr in table.find_all('tr'):
             tds = tr.find_all(['td', 'th'])
-            # 후보자 이름이 첫 번째 셀에 있는 행 찾기
             if not tds or candidate_name not in tds[0].get_text(strip=True):
                 continue
 
-            # 기간/내용 셀 위치 찾기 — 헤더 행에서 세부경력 컬럼 위치 확인
-            # 보통 세부경력이 2개 컬럼(기간, 내용)을 차지
-            # 테이블에서 기간 패턴이 있는 셀과 그 다음 셀을 찾기
+            # 기간 셀 찾기: 숫자~숫자 또는 숫자~현 패턴이 있는 셀
             period_td = None
             content_td = None
             for i, td in enumerate(tds):
                 td_text = td.get_text(strip=True)
-                if re.search(r'\d{4}\s*~', td_text):
+                if re.search(r'\d{2,4}\s*~', td_text):
                     period_td = td
                     if i + 1 < len(tds):
                         content_td = tds[i + 1]
@@ -1088,20 +1085,44 @@ def _extract_career_from_html(html: str, candidate_name: str) -> list[dict] | No
             if not period_td:
                 continue
 
-            # <p> 태그별로 기간/내용 분리
+            # <p> 태그별로 분리
             period_ps = [p.get_text(strip=True) for p in period_td.find_all('p') if p.get_text(strip=True)]
             content_ps = [p.get_text(strip=True) for p in content_td.find_all('p') if p.get_text(strip=True)] if content_td else []
 
-            if not period_ps:
-                continue
+            # <p> 태그가 없으면 bs4 파싱 실패 → regex fallback
+            if not period_ps and not content_ps:
+                return None
 
-            # 기간과 내용 매핑
+            # <p>가 기간 쪽에 없지만 내용 쪽에는 있는 경우 → 기간은 regex, 내용은 <p> 활용
+            if not period_ps:
+                period_raw = period_td.get_text(strip=True)
+                # 기간 전처리
+                period_raw = re.sub(r'現', '현재', period_raw)
+                period_raw = re.sub(r'~\s*현(?!재)', '~현재', period_raw)
+                period_raw = re.sub(r'(현재)(\d)', r'\1 \2', period_raw)
+                # 아포스트로피 2자리 연도: '20 → 2020, '14 → 2014
+                period_raw = re.sub(r"[''`](\d{2})", lambda m: f"20{m.group(1)}" if int(m.group(1)) <= 30 else f"19{m.group(1)}", period_raw)
+                # 붙어있는 4자리 연도 분리
+                period_raw = re.sub(r'(\d{4})(\d{4})', r'\1 \2', period_raw)
+                period_raw = re.sub(r'(\d{4})(\d{4})', r'\1 \2', period_raw)
+                periods = re.findall(r'\d{4}\s*~\s*(?:현재|\d{4})|\d{4}', period_raw)
+                if len(periods) == len(content_ps):
+                    return [{"period": p, "content": c} for p, c in zip(periods, content_ps)]
+                # 기간/내용 수 불일치 → content_ps만이라도 활용
+                result = []
+                for i, ct in enumerate(content_ps):
+                    p = periods[i] if i < len(periods) else ""
+                    result.append({"period": p, "content": ct})
+                if result:
+                    return result
+                return None
+
+            # 양쪽 다 <p> 있음 → 1:1 매핑
             result = []
             for i in range(max(len(period_ps), len(content_ps))):
                 p = period_ps[i] if i < len(period_ps) else ""
                 ct = content_ps[i] if i < len(content_ps) else ""
                 if p or ct:
-                    # 기간 없는 내용은 직전 항목에 합침 (같은 기간에 여러 직책)
                     if not p and result:
                         result[-1]["content"] += ", " + ct
                     else:
@@ -1222,6 +1243,7 @@ def _extract_candidates(agenda_detail: dict, html: str = "") -> list[dict]:
 
         # 나. 주된직업ㆍ세부경력 — 기존 후보자에 매칭
         if heading.startswith("나.") or '주된직업' in heading:
+            # 주된직업/거래내역은 마크다운 테이블에서 추출 (단순 필드)
             for block in sec.get("blocks", []):
                 if block["type"] != "table":
                     continue
@@ -1229,30 +1251,12 @@ def _extract_candidates(agenda_detail: dict, html: str = "") -> list[dict]:
                 if len(rows) < 2:
                     continue
                 headers = rows[0]
-
-                # 세부경력 컬럼 인덱스 찾기
-                career_idx = None
-                career_content_idx = None
-                for hi, h in enumerate(headers):
-                    hc = re.sub(r'\s+', '', h)
-                    if '세부경력' in hc:
-                        career_idx = hi
-                        # 다음 빈 컬럼이 내용
-                        if hi + 1 < len(headers) and not headers[hi + 1].strip():
-                            career_content_idx = hi + 1
-
-                period_idx = career_idx
-                content_idx = career_content_idx
-
                 for row in rows[1:]:
                     if not row or not row[0].strip():
                         continue
-
-                    # "기간 | 내용" 헤더 행 스킵
                     row0 = re.sub(r'\s+', '', row[0])
                     if row0 in ('기간', '내용', '총', ''):
                         continue
-
                     name = row[0].strip()
                     for c in candidates:
                         if c["name"] == name:
@@ -1266,69 +1270,98 @@ def _extract_candidates(agenda_detail: dict, html: str = "") -> list[dict]:
                                 elif '거래내역' in h:
                                     c["recent3yTransactions"] = val if val and val != '없음' else None
 
-                            # 세부경력 기간/내용 분리
-                            periods_raw = row[period_idx].strip() if period_idx is not None and period_idx < len(row) else ""
-                            contents_raw = row[content_idx].strip() if content_idx is not None and content_idx < len(row) else ""
+            # 세부경력: bs4 직접 파싱 (1단계) → regex fallback (2단계)
+            for c in candidates:
+                name = c["name"]
+                # 1단계: HTML <p> 태그에서 직접 분리
+                html_career = _extract_career_from_html(html, name)
+                if html_career:
+                    c["careerDetails"] = html_career
+                    c["careerCompanyGroups"] = _build_career_company_groups(html_career)
+                    continue
 
-                            # 기간 전처리: 現→현재, ~현→~현재, 현재+숫자 사이 공백
-                            periods_raw = re.sub(r'現', '현재', periods_raw)
-                            periods_raw = re.sub(r'~\s*현(?!재)', '~현재', periods_raw)
-                            periods_raw = re.sub(r'(현재)(\d)', r'\1 \2', periods_raw)
-                            # 붙어있는 4자리 연도 분리 (20252013 → 2025 2013)
-                            periods_raw = re.sub(r'(\d{4})(\d{4})', r'\1 \2', periods_raw)
-                            periods_raw = re.sub(r'(\d{4})(\d{4})', r'\1 \2', periods_raw)
-                            # 기간 패턴 분리
-                            periods = re.findall(r'\d{4}\s*~\s*(?:현재|\d{4})|\d{4}', periods_raw)
-                            # 비정상 연도 검증
-                            valid_periods = []
-                            for p in periods:
-                                years = re.findall(r'\d{4}', p)
-                                if not all(1950 <= int(y) <= 2030 for y in years):
-                                    logger.warning(f"[CAREER] 비정상 기간: '{p}' from '{periods_raw}' — {name}")
-                                elif len(years) == 2 and int(years[0]) > int(years[1]):
-                                    logger.warning(f"[CAREER] 역순 기간: '{p}' — {name}")
-                                else:
-                                    valid_periods.append(p)
-                            periods = valid_periods
-                            # 내용 패턴 분리: "現) ..." / "前) ..." / "- (주)회사명..."
-                            if re.search(r'(?:現|前|현|전)\)', contents_raw):
-                                contents = re.split(r'(?=(?:現|前|현|전)\)\s)', contents_raw)
-                                contents = [re.sub(r'^(?:現|前|현|전)\)\s*', '', x).strip() for x in contents if x.strip()]
-                            elif re.search(r'-\s*[\(\(가-힣A-Z]', contents_raw):
-                                # "- (주)LG화학...- 서울대학교...- NHN(NAVER)..." 통합 패턴
-                                contents = re.split(r'(?=-\s*[\(\(가-힣A-Z])', contents_raw)
-                                contents = [re.sub(r'^-\s*', '', x).strip() for x in contents if x.strip()]
+                # 2단계: regex fallback — 마크다운 테이블에서 기간/내용 분리
+                for block in sec.get("blocks", []):
+                    if block["type"] != "table":
+                        continue
+                    rows = _parse_md_table(block["content"])
+                    if len(rows) < 2:
+                        continue
+                    headers = rows[0]
+                    career_idx = None
+                    career_content_idx = None
+                    for hi, h in enumerate(headers):
+                        hc = re.sub(r'\s+', '', h)
+                        if '세부경력' in hc:
+                            career_idx = hi
+                            if hi + 1 < len(headers) and not headers[hi + 1].strip():
+                                career_content_idx = hi + 1
+
+                    if career_idx is None:
+                        continue
+
+                    for row in rows[1:]:
+                        if not row or not row[0].strip():
+                            continue
+                        row0 = re.sub(r'\s+', '', row[0])
+                        if row0 in ('기간', '내용', '총', ''):
+                            continue
+                        if row[0].strip() != name:
+                            continue
+
+                        periods_raw = row[career_idx].strip() if career_idx < len(row) else ""
+                        contents_raw = row[career_content_idx].strip() if career_content_idx is not None and career_content_idx < len(row) else ""
+
+                        # 기간 전처리
+                        periods_raw = re.sub(r'現', '현재', periods_raw)
+                        periods_raw = re.sub(r'~\s*현(?!재)', '~현재', periods_raw)
+                        periods_raw = re.sub(r'(현재)(\d)', r'\1 \2', periods_raw)
+                        periods_raw = re.sub(r'(\d{4})(\d{4})', r'\1 \2', periods_raw)
+                        periods_raw = re.sub(r'(\d{4})(\d{4})', r'\1 \2', periods_raw)
+                        periods = re.findall(r'\d{4}\s*~\s*(?:현재|\d{4})|\d{4}', periods_raw)
+                        # 비정상 연도 검증
+                        valid_periods = []
+                        for p in periods:
+                            years = re.findall(r'\d{4}', p)
+                            if not all(1950 <= int(y) <= 2030 for y in years):
+                                logger.warning(f"[CAREER] 비정상 기간: '{p}' from '{periods_raw}' — {name}")
+                            elif len(years) == 2 and int(years[0]) > int(years[1]):
+                                logger.warning(f"[CAREER] 역순 기간: '{p}' — {name}")
                             else:
-                                # 법인격 패턴으로 분리: (주)/(재)/(사)/법무법인 앞에서
-                                if re.search(r'(?:\(주\)|\(재\)|\(사\)|법무법인)', contents_raw):
-                                    contents = re.split(r'(?=\(주\)|\(재\)|\(사\)|법무법인)', contents_raw)
-                                    contents = [x.strip() for x in contents if x.strip()]
-                                else:
-                                    contents = [contents_raw.strip()] if contents_raw.strip() else []
+                                valid_periods.append(p)
+                        periods = valid_periods
 
-                            career_details = []
-                            if len(periods) > 1 and len(contents) <= 1:
-                                # 기간은 여러 개인데 내용이 1개 → HTML <p> 태그에서 직접 분리 시도
-                                html_career = _extract_career_from_html(html, name)
-                                if html_career and len(html_career) >= len(periods):
-                                    career_details = html_career
-                                else:
-                                    # HTML fallback 실패 → 전체 기간 범위 + 전체 내용을 하나로 합침
-                                    full_period = f"{periods[0].split('~')[0].strip()} ~ {periods[-1].split('~')[-1].strip()}"
-                                    full_content = contents[0] if contents else contents_raw.strip()
-                                    career_details.append({"period": full_period, "content": full_content})
-                            else:
-                                for i in range(max(len(periods), len(contents))):
-                                    p = periods[i] if i < len(periods) else ""
-                                    ct = contents[i] if i < len(contents) else ""
-                                    if p or ct:
-                                        career_details.append({"period": p, "content": ct})
+                        # 내용 분리
+                        if re.search(r'(?:現|前|현|전)\)', contents_raw):
+                            contents = re.split(r'(?=(?:現|前|현|전)\)\s)', contents_raw)
+                            contents = [re.sub(r'^(?:現|前|현|전)\)\s*', '', x).strip() for x in contents if x.strip()]
+                        elif re.search(r'-\s*[\(\(가-힣A-Z]', contents_raw):
+                            contents = re.split(r'(?=-\s*[\(\(가-힣A-Z])', contents_raw)
+                            contents = [re.sub(r'^-\s*', '', x).strip() for x in contents if x.strip()]
+                        elif re.search(r'(?:\(주\)|\(재\)|\(사\)|법무법인)', contents_raw):
+                            contents = re.split(r'(?=\(주\)|\(재\)|\(사\)|법무법인)', contents_raw)
+                            contents = [x.strip() for x in contents if x.strip()]
+                        else:
+                            contents = [contents_raw.strip()] if contents_raw.strip() else []
 
-                            if career_details:
-                                c["careerDetails"] = career_details
-                                c["careerCompanyGroups"] = _build_career_company_groups(career_details)
-                            elif periods_raw or contents_raw:
-                                c["careerDetails"] = [{"period": periods_raw, "content": contents_raw}]
+                        career_details = []
+                        if len(periods) > 1 and len(contents) <= 1:
+                            full_period = f"{periods[0].split('~')[0].strip()} ~ {periods[-1].split('~')[-1].strip()}"
+                            full_content = contents[0] if contents else contents_raw.strip()
+                            career_details.append({"period": full_period, "content": full_content})
+                        else:
+                            for i in range(max(len(periods), len(contents))):
+                                p = periods[i] if i < len(periods) else ""
+                                ct = contents[i] if i < len(contents) else ""
+                                if p or ct:
+                                    career_details.append({"period": p, "content": ct})
+
+                        if career_details:
+                            c["careerDetails"] = career_details
+                            c["careerCompanyGroups"] = _build_career_company_groups(career_details)
+                        elif periods_raw or contents_raw:
+                            c["careerDetails"] = [{"period": periods_raw, "content": contents_raw}]
+                        break
 
         # 다. 체납사실 — 기존 후보자에 매칭 (3개 필드 분리)
         if heading.startswith("다.") or '체납' in heading:
