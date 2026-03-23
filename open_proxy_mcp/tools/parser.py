@@ -1970,6 +1970,18 @@ def parse_financial_statements(html: str) -> dict:
             fs_container = container
             break
 
+    # fallback: library 없이 section 직계 자식에 재무제표가 있는 경우
+    # (한국금융지주 등 — □ 재무제표 보고 <p> + <table> 이 section-2에 직접 나열)
+    if not fs_container:
+        # detail_section 자체를 컨테이너로 사용
+        section_text = re.sub(r'\s+', '', detail_section.get_text()[:1000])
+        if '재무제표' in section_text or '재무상태표' in section_text:
+            # table이 직접 있는지 확인
+            direct_tables = [t for t in detail_section.find_all('table', recursive=False)]
+            if direct_tables:
+                fs_container = detail_section
+                logger.info("재무제표 파싱: library 없이 section에서 직접 발견")
+
     if not fs_container:
         logger.warning("재무제표 파싱: 재무제표 library를 찾을 수 없음")
         return _empty_financial_result()
