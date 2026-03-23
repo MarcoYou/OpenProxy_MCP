@@ -1,5 +1,22 @@
 # Dev Log
 
+## 2026-03-24
+
+### 파서 개선 (추가)
+- rowspan 경력 테이블 파싱 — 72개 기업 대응, 22건 이슈 해결
+- YYYY.MM / YYYY년M월 기간 형식 지원
+- `<p>` 있는 경력 이슈 5건 전부 해결 (한화, 호텔신라, 한일시멘트)
+
+### 프론트엔드
+- KOSPI 200 전체 199개 기업 FE 반영 (pipeline 자동 로드)
+- mockData.ts → import.meta.glob 전환
+- 192개 기업 로고 다운로드 (AlphaSquare CDN)
+- CEO/결산월 DART company.json에서 자동 가져오기
+- 공고일/정정 칩 표시 (DART 최신 접수일 기준)
+- 분석상태: 정상/검토필요/실패 + Radix Tooltip 호버
+- checklist=null 크래시 수정
+- 법인명 정리 ((주)/주식회사 제거)
+
 ## 2026-03-23
 
 ### 파서 개선 4건
