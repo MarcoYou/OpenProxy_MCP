@@ -66,11 +66,45 @@
 - financials 실패 6건: 문서 구조 비표준 (한국금융지주, KCC, 한솔케미칼, 농심, 대한유화, 세방전지)
 - 경력 이슈 46건: content>100자(한 줄 합쳐짐) 또는 빈 기간 — DART 원본 한계, LLM fallback 대상
 
+### 패턴 개선 (KOSPI 200 검증 후)
+
+**11. agenda boundary — 의결권 안내, 주총 소집 통지 패턴**
+- KB금융, DL이앤씨 long_title 해결 → agenda valid 186→188/189
+
+**12. 재무제표 library fallback — section 직계 테이블 탐색**
+- 한국금융지주: library 없이 `<p>` + `<table>` 직접 나열 패턴 → financials 183→184/189
+- KCC/농심/대한유화/세방전지: 문서 자체에 재무제표 미포함 (파서 한계 아님)
+
+### AOI/Personnel 추가 검증 (189개, 디스크 캐시)
+
+| 항목 | 성공 | 비율 |
+|------|------|------|
+| AOI (정관변경) | 180/184 | 97.8% |
+| Personnel (이사 선임) | 177/179 | 98.9% |
+
+- 실패: BNK금융지주(aoi+pers), 기업은행(aoi), SK케미칼/iM금융지주는 rcept_no 갱신으로 자동 해결
+
+### KOSPI 200 전체 FE 반영
+
+- `regen_pipeline.py` 확장: 새 기업 골격 생성(`_build_new_json`) + 기존 업데이트 통합
+- 199개 pipeline JSON 생성 (기존 10개 UPD + 신규 189개 NEW)
+- `mockData.ts` → pipeline 자동 로드 전환 필요 (다음 작업)
+
 ### 인프라
 - 디스크 캐시 추가 (cache/ 디렉토리, 세션 간 API 재사용)
 - DART API 차단 원인 규명: IP 차단이 아닌 rcept_no 만료 (정정공고 대체)
 - KRX Open API 키 저장
 - `/ship` 커맨드 서브모듈 경로 규칙 추가
+
+### 오늘의 성과
+- KOSPI 200 전체 파서 검증 + 패턴 개선 12건
+- agenda 99.5%, financials 97.4%, personnel 98.9%, aoi 97.8%
+- 199개 기업 pipeline JSON 생성 + FE push
+
+### 오늘의 실패 / 한계
+- BNK금융지주/기업은행: 비표준 library 구조 → LLM fallback 대상
+- 경력 content 합쳐짐 46건: DART 원본에 구분자 없음, soft pattern으로 해결 불가
+- mockData.ts 자동 로드 미전환
 
 ## 2026-03-22
 

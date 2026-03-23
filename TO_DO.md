@@ -100,12 +100,14 @@
 - [ ] 영문 브랜드명(KT&G 등) → corp_code 매핑 지원 (별칭 또는 영문명 API)
 
 ### 파서 개선
-- [x] 811건 배치 테스트 + 5가지 개선 (93%→97~98% 예상)
-  - ※ 비고 필터링, 보고사항 필터링, 중복 번호 dedup, boundary 패턴 4종, 연속 공백 정리
-- [x] 경력 분리 개선 — 기간 여러 개 + 내용 1개일 때 합쳐서 반환
-- [x] 허은녕(삼성전자 제4호) candidates 파싱 실패 — SPAN 분리 시 제목 줄바꿈 합침 수정
-- [x] 김이배(NAVER 제4호) careerDetails 빈 period — 단독연도 감지 + 내용 분리 통합 패턴 수정
-- [ ] 811건 전수 regression 테스트 (다음 파서 수정 시 겸사겸사)
+- [x] 811건 배치 테스트 + 5가지 개선 (93%→97~98%)
+- [x] KOSPI 200 검증 (189개) + 패턴 개선 12건 → agenda 99.5%, fin 97.4%, pers 98.9%, aoi 97.8%
+- [x] bs4 1단계 경력 파싱 + regex 2단계 fallback
+- [x] 2자리 연도, 하이픈 구분자, 아포스트로피, 역순 기간 보정, 빈 content 제거
+- [x] 재무제표 library fallback (section 직계 테이블)
+- [x] agenda details fallback (안건 마커 없는 가.나.다. 섹션)
+- [ ] BNK금융지주/기업은행 비표준 구조 — LLM fallback 대상
+- [ ] 경력 content 합쳐짐 46건 — DART 원본 한계, LLM fallback 고려
 - [ ] Claude API (Anthropic) fallback 추가 (현재 OpenAI만 테스트 완료)
 
 ### API 최적화
@@ -125,5 +127,6 @@
 - [x] 정관변경 접이식 카드 UI
 - [x] 주총 종료 자동 감지
 - [ ] 주총 이력 관리 (정기/임시, 연도별) — DB에서 처리
-- [ ] mockData.ts 자동화 (수동 JSON 생성 → API 자동)
+- [ ] mockData.ts → pipeline 자동 로드 전환 (199개 기업 FE 표시)
+- [x] KOSPI 200 전체 pipeline JSON 생성 (199개)
 - [ ] i18n 한영 토글 — `feat/eng-added` 브랜치에 아카이브, 런타임 에러 수정 후 재적용
