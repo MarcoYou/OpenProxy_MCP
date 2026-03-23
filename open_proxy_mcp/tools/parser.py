@@ -1270,9 +1270,26 @@ def _extract_candidates(agenda_detail: dict, html: str = "") -> list[dict]:
                             periods_raw = row[period_idx].strip() if period_idx is not None and period_idx < len(row) else ""
                             contents_raw = row[content_idx].strip() if content_idx is not None and content_idx < len(row) else ""
 
-                            # 기간 패턴 분리: "2021~현재 2022~2024" → ["2021~현재", "2022~2024"]
-                            # 범위(YYYY~YYYY/현재) 우선, 단독 연도(YYYY)도 포함
+                            # 기간 전처리: 現→현재, ~현→~현재, 현재+숫자 사이 공백
+                            periods_raw = re.sub(r'現', '현재', periods_raw)
+                            periods_raw = re.sub(r'~\s*현(?!재)', '~현재', periods_raw)
+                            periods_raw = re.sub(r'(현재)(\d)', r'\1 \2', periods_raw)
+                            # 붙어있는 4자리 연도 분리 (20252013 → 2025 2013)
+                            periods_raw = re.sub(r'(\d{4})(\d{4})', r'\1 \2', periods_raw)
+                            periods_raw = re.sub(r'(\d{4})(\d{4})', r'\1 \2', periods_raw)
+                            # 기간 패턴 분리
                             periods = re.findall(r'\d{4}\s*~\s*(?:현재|\d{4})|\d{4}', periods_raw)
+                            # 비정상 연도 검증
+                            valid_periods = []
+                            for p in periods:
+                                years = re.findall(r'\d{4}', p)
+                                if not all(1950 <= int(y) <= 2030 for y in years):
+                                    logger.warning(f"[CAREER] 비정상 기간: '{p}' from '{periods_raw}' — {name}")
+                                elif len(years) == 2 and int(years[0]) > int(years[1]):
+                                    logger.warning(f"[CAREER] 역순 기간: '{p}' — {name}")
+                                else:
+                                    valid_periods.append(p)
+                            periods = valid_periods
                             # 내용 패턴 분리: "現) ..." / "前) ..." / "- (주)회사명..."
                             if re.search(r'(?:現|前|현|전)\)', contents_raw):
                                 contents = re.split(r'(?=(?:現|前|현|전)\)\s)', contents_raw)
