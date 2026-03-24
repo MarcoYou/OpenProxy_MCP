@@ -1225,7 +1225,7 @@ def _parse_period_raw(period_raw: str) -> list[str]:
 
 
 def _clean_career_details(details: list[dict], name: str = "") -> list[dict]:
-    """경력 리스트 정리: 빈 content 제거, 역순 기간 검증"""
+    """경력 리스트 정리: 빈 content 제거, 역순 기간 검증, 합쳐진 content 분리"""
     cleaned = []
     for d in details:
         period = d.get("period", "").strip()
@@ -1237,12 +1237,20 @@ def _clean_career_details(details: list[dict], name: str = "") -> list[dict]:
         years = re.findall(r'\d{4}', period)
         if len(years) == 2 and int(years[0]) > int(years[1]):
             logger.warning(f"[CAREER] 역순 기간: '{period}' — {name}")
-            period = f"{years[1]} ~ {years[0]}"  # 자동 보정
+            period = f"{years[1]} ~ {years[0]}"
             d["period"] = period
         # 비정상 연도
         if years and not all(1950 <= int(y) <= 2030 for y in years):
             logger.warning(f"[CAREER] 비정상 기간: '{period}' — {name}")
             d["period"] = ""
+        # 합쳐진 content 분리 — 영문)+한글, ㈜ 앞에서 줄바꿈
+        if len(content) > 80:
+            # 1단계: 영문) + 한글/㈜ 경계에서 분리
+            parts = re.split(r'(?<=[a-zA-Z]\))(?=[가-힣㈜])', content)
+            content = "\n".join(p.strip() for p in parts if p.strip())
+            # 2단계: ㈜ 앞에서 분리 (직전이 한글이면 — 장㈜, 사㈜ 등)
+            content = re.sub(r'(?<=[가-힣])(?=㈜)', '\n', content)
+            d["content"] = content
         cleaned.append(d)
     return cleaned
 
