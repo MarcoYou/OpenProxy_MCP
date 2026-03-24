@@ -62,6 +62,18 @@ LLM fallback은 소프트/하드 패턴으로 해결 못 한 케이스를 처리
 - 소프트+하드 패턴 적용 후에도 분리 안 된 케이스
 - LLM API 호출 → 구조화된 결과로 대체
 
+## 크래시 이력
+
+| 날짜 | 종목/위치 | 원인 | 수정 |
+|------|----------|------|------|
+| 3/23 | 기존 10개 기업 전체 안건 | `checklist=null` → `.length` 호출 | null → `[]` 일괄 수정 |
+| 3/25 | 태광산업 제3호 | `careerDetails` undefined → `.length` 호출 | optional chaining `?.` + fallback `\|\| []` |
+| 3/22 | i18n 영어 버전 안건 클릭 | useTranslation hook 누락 (하위 컴포넌트) | hook 추가 후 아카이브 (feat/eng-added) |
+
+### 공통 원인
+- 파서가 최소 필드만 반환 (`name`, `roleType`)하면 FE에서 나머지 필드(`careerDetails`, `eligibility` 등)가 undefined
+- FE 컴포넌트에서 optional chaining(`?.`) 없이 접근
+
 ## 미해결 (LLM fallback 대상)
 
 | 종목 | 데이터 | 문제 |
