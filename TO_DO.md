@@ -106,9 +106,17 @@
 - [x] 2자리 연도, 하이픈 구분자, 아포스트로피, 역순 기간 보정, 빈 content 제거
 - [x] 재무제표 library fallback (section 직계 테이블)
 - [x] agenda details fallback (안건 마커 없는 가.나.다. 섹션)
+- [x] rowspan 경력 파싱 (72개 기업), YYYY.MM/YYYY년M월/아포스트로피 기간
+- [x] 소프트패턴: 영문)+한글, 한글+㈜ 경계 분리
+- [x] 하드패턴: 대기업 그룹명 뒤 직책+회사명 분리
+- [x] 전수점검: 비정상 이름 6건, 경력 없음 43건, 크래시 1건 수정
+- [ ] 안건번호=후보자이름 17건 — 파서 근본 수정 필요
+- [ ] 정관텍스트=후보자 4건 — 파서 수정
+- [ ] 경력 없는 후보자 13건 — 나. 서브섹션 매칭 실패
+- [ ] 미해결 경력 24건 — LLM fallback 구현
 - [ ] BNK금융지주/기업은행 비표준 구조 — LLM fallback 대상
-- [ ] 경력 content 합쳐짐 46건 — DART 원본 한계, LLM fallback 고려
-- [ ] Claude API (Anthropic) fallback 추가 (현재 OpenAI만 테스트 완료)
+- [ ] Claude API (Anthropic) fallback 추가
+- [ ] 직책/대기업 키워드 리스트 data/ 디렉토리 분리
 
 ### API 최적화
 - [ ] search_filings_by_ticker 결과 캐싱 (같은 ticker 중복 호출 방지)
