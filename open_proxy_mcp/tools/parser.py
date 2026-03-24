@@ -1243,13 +1243,19 @@ def _clean_career_details(details: list[dict], name: str = "") -> list[dict]:
         if years and not all(1950 <= int(y) <= 2030 for y in years):
             logger.warning(f"[CAREER] 비정상 기간: '{period}' — {name}")
             d["period"] = ""
-        # 합쳐진 content 분리 — 영문)+한글, ㈜ 앞에서 줄바꿈
+        # 합쳐진 content 분리 — 소프트 + 하드 패턴
         if len(content) > 80:
-            # 1단계: 영문) + 한글/㈜ 경계에서 분리
+            # 소프트: 영문) + 한글/㈜ 경계
             parts = re.split(r'(?<=[a-zA-Z]\))(?=[가-힣㈜])', content)
             content = "\n".join(p.strip() for p in parts if p.strip())
-            # 2단계: ㈜ 앞에서 분리 (직전이 한글이면 — 장㈜, 사㈜ 등)
+            # 소프트: 한글 + ㈜ 경계
             content = re.sub(r'(?<=[가-힣])(?=㈜)', '\n', content)
+            # 하드: 직책 뒤에 대기업 그룹명이 붙는 경우
+            _CONGLOMERATES = r'한화|삼성|LG|SK|현대|롯데|CJ|두산|포스코|GS|LS|HD|네이버|카카오|신세계|이마트|코웨이|셀트리온|대한항공|아시아나'
+            content = re.sub(
+                rf'((?:대표)?이사|사장|부사장|상무|전무|본부장|팀장|실장|교수|위원장?|고문)(?=(?:{_CONGLOMERATES})[가-힣A-Za-z]*)',
+                r'\1\n', content
+            )
             d["content"] = content
         cleaned.append(d)
     return cleaned
