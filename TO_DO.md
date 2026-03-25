@@ -35,8 +35,9 @@
 ### 기업 검색 개선
 - [ ] 영문 브랜드명(KT&G 등) → corp_code 매핑 지원 (별칭 또는 영문명 API)
 
-### 연동 테스트
-- [ ] Claude Desktop 또는 Claude Code에서 실제 연동 테스트
+### 연동 테스트 ✓
+- [x] Claude Code MCP 연동 (stdio)
+- [x] Claude 웹 Cowork 커넥터 연동 (SSE + ngrok)
 
 ### 파서 개선 (LLM fallback으로 커버 중)
 - [x] `제` 없는 비표준 하위안건 번호 패턴 대응 (lookahead 경계로 해결)
@@ -135,6 +136,6 @@
 - [x] 정관변경 접이식 카드 UI
 - [x] 주총 종료 자동 감지
 - [ ] 주총 이력 관리 (정기/임시, 연도별) — DB에서 처리
-- [ ] mockData.ts → pipeline 자동 로드 전환 (199개 기업 FE 표시)
+- [x] mockData.ts → pipeline 자동 로드 전환 (import.meta.glob)
 - [x] KOSPI 200 전체 pipeline JSON 생성 (199개)
 - [ ] i18n 한영 토글 — `feat/eng-added` 브랜치에 아카이브, 런타임 에러 수정 후 재적용
