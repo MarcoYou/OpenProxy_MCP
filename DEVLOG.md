@@ -29,6 +29,16 @@
 - KOSPI 200 pipeline JSON에서 파서별 실패 추출 → fallback_targets.json
 - 61개 기업, HARD 53건, SOFT 112건 (대부분 personnel 경력 이슈)
 
+### 프론트엔드
+- DART 원문 보기 버튼 추가 (개요탭 테이블 우측 하단, rceptNo 직링크)
+- pipeline JSON 198개에 rceptNo 패치
+- regen_pipeline.py에 rceptNo 저장 로직 추가
+
+### PDF 전체 다운로드 + 파싱
+- KOSPI 200 전체 198개 PDF 다운로드 (랜덤 간격 2-5초, 배치 15-30초)
+- opendataloader로 198개 전체 마크다운 파싱 완료
+- PDF-only vs XML 비교 분석 준비 완료
+
 ### 기타
 - agm_aoi → agm_aoi_change 리네임
 - blueprint.md → README.md 통합 (관리 포인트 축소)
