@@ -533,6 +533,7 @@ async def process_company(client: DartClient, name: str, ticker: str, json_file:
             _update_financials(agenda, fin)
 
     # 공고일/정정/CEO/결산월
+    data["meetingInfo"]["rceptNo"] = rcept_no
     data["meetingInfo"]["noticeDate"] = notice_date
     data["meetingInfo"]["isCorrected"] = is_correction
     data["meetingInfo"]["ceo"] = ceo
