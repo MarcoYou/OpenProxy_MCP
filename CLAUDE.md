@@ -17,7 +17,7 @@ DART(전자공시시스템) 데이터를 MCP 프로토콜로 제공하는 Python
 open_proxy_mcp/       # MCP 서버 (Python)
   server.py           # FastMCP 서버 진입점
   tools/
-    shareholder.py    # MCP tool 9개 (agm_*) + 포매터 + format_krw
+    shareholder.py    # MCP tool 11개 (agm_*) + 포매터 + format_krw
     parser.py         # 파서 (bs4+regex) — 안건/재무/인사/정정
   dart/
     client.py         # OpenDART API 래퍼 (인증, 캐싱, HTML 보존)
@@ -78,6 +78,8 @@ README.md             # tool 체계 + 데이터 흐름 다이어그램
 - 파서 상세/벤치마크/실패 케이스 → `DEVLOG.md` 참조
 - 참고 프로젝트 상세 → `references.md` 참조
 - 미완료 작업 → `TO_DO.md` 참조
+- 파서 성공 기준 / LLM fallback 예시 → `CASE_DEFINITION.md` 참조
+- fallback 대상 기업 목록 → `fallback_targets.json` 참조
 - 프로젝트 히스토리 → `git log` 참조
 
 ## 개발 방식
