@@ -80,9 +80,9 @@ AI calls agm_personnel_xml(rcept_no)
 | Personnel | 98.9% | 97.9% | 100% |
 | Charter changes | 97.8% | 99.0% | 100% |
 | Compensation | 98.4% | 99.5% | 100% |
-| Treasury shares | 93.6% | 100% | - |
-| Capital reserve | 100% | 100% | - |
-| Retirement pay | 93.3% | 86.7% | - |
+| Treasury shares | 93.6% | 100% | 100% |
+| Capital reserve | 100% | 100% | 100% |
+| Retirement pay | 93.3% | 86.7% | 86.7% |
 
 ## Data Flow
 
