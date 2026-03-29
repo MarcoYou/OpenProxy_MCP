@@ -237,4 +237,4 @@ AI에게: "먼저 `agm_guide`를 호출해서 사용법을 읽어줘"
 
 ## 라이선스
 
-MIT
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) - 비상업적 사용만 허용
