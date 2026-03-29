@@ -7,10 +7,20 @@
 1. **LLM fallback 가이드** — 각 안건이 뭔지, 성공적으로 파싱하면 어떻게 생겨야 하는지의 도메인 설명 + 실제 예시. LLM이 이 문서를 참고하여 예시에 가깝게 파싱하도록 유도.
 2. **기계적 품질 판정** — SUCCESS / SOFT_FAIL / HARD_FAIL 자동 분류 기준. PDF fallback과 LLM fallback 트리거 조건.
 
+## 판정 원칙
+
+**안건 tree 기반 판단**: 해당 안건이 소집공고에 존재하는 경우에만 파서 성공/실패를 판정한다.
+안건 자체가 없으면 파서 결과가 비어있는 것이 정상이며, 실패로 분류하지 않는다.
+
+예시:
+- 보수한도 승인 안건이 없는 기업 → `agm_compensation`이 "보수한도 승인 안건이 없습니다" 반환 = **정상**
+- 이사 선임 안건이 없는 공기업 → `agm_personnel`이 0명 반환 = **정상**
+- 정관변경 안건이 없는 기업 → `agm_aoi_change`이 0건 반환 = **정상**
+
 ## Fallback Decision Matrix
 
 ```
-파서 결과 판정
+파서 결과 판정 (해당 안건이 존재하는 경우에만)
   ├─ SUCCESS → 그대로 사용
   ├─ SOFT_FAIL → PDF fallback으로 보강 시도
   │   └─ 여전히 SOFT_FAIL → LLM fallback (이 문서의 예시를 few-shot으로 전달)
