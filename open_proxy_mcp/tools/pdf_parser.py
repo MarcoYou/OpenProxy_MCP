@@ -359,11 +359,25 @@ def parse_personnel_pdf(md_text: str) -> dict:
                     continue
         i += 1
 
-    # 3. 안건-후보자 매핑
-    # 간단한 방식: 경력 테이블 순서대로 안건에 매핑
-    all_candidates = []
+    # 3. 후보자 dedup (같은 이름이 여러 테이블에서 나오면 경력 많은 쪽 유지)
+    raw_candidates = []
     for ct in career_tables:
-        all_candidates.extend(ct)
+        raw_candidates.extend(ct)
+
+    all_candidates = []
+    seen_names = {}
+    for c in raw_candidates:
+        name = c.get('name', '')
+        career_count = len(c.get('careerDetails', []))
+        if name in seen_names:
+            # 기존보다 경력 많으면 교체
+            if career_count > len(seen_names[name].get('careerDetails', [])):
+                all_candidates = [x for x in all_candidates if x.get('name') != name]
+                all_candidates.append(c)
+                seen_names[name] = c
+        else:
+            all_candidates.append(c)
+            seen_names[name] = c
 
     if agenda_sections:
         # 안건별로 후보자 배분 (제목에서 이름 매칭)
@@ -956,8 +970,11 @@ def parse_agenda_pdf(md_text: str) -> list[dict]:
 
     # 검색 범위: 목적사항부터 100줄 (안건 목록은 보통 한 페이지)
     for i in range(agenda_start, min(len(lines), agenda_start + 100)):
-        line = lines[i].strip()
-        line = re.sub(r'^[-\s*□○◆▶]+', '', line)
+        raw_line = lines[i].strip()
+        # 테이블 행에서 안건 번호를 잡지 않기 (정관변경 테이블 등)
+        if raw_line.startswith('|') or raw_line.count('|') >= 2:
+            continue
+        line = re.sub(r'^[-\s*□○◆▶]+', '', raw_line)
 
         m = agenda_pattern.match(line)
         if not m:
