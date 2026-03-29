@@ -166,17 +166,23 @@ def parse_compensation_pdf(md_text: str) -> dict:
             if '|' in line and ('이사의 수' in line or '감사의 수' in line or '보수총액' in line or '최고한도' in line):
                 rows, end_i = _parse_md_table_rows(lines, i)
                 if rows:
-                    if not phase:
-                        phase = "current" if not current else "prior"
                     parsed = _parse_comp_kv_table(rows)
-                    if phase == "current" and not current:
+                    # phase 자동 판정: "실제 지급" 키가 있으면 prior
+                    if parsed.get('actualPaid') or parsed.get('actualPaidAmount'):
+                        if not prior:
+                            prior = parsed
+                    elif not phase:
+                        # phase 텍스트 없이 첫 테이블 → current
+                        if not current:
+                            current = parsed
+                        elif not prior:
+                            prior = parsed
+                    elif phase == "current" and not current:
                         current = parsed
                     elif phase == "prior" and not prior:
                         prior = parsed
-                    elif current and not prior and parsed.get('actualPaid'):
-                        prior = parsed
-                    i = end_i  # end_i는 테이블 다음 줄 — while 루프에서 다시 처리
-                    continue  # i += 1 건너뛰고 end_i 줄부터 재처리
+                    i = end_i
+                    continue
 
             # 주석
             if line.startswith('※') or (line.startswith('*') and '이사' not in line):
@@ -240,6 +246,9 @@ def _parse_krw(text: str) -> int | None:
         return None
     text = re.split(r'[+＋]', text)[0].strip()
     text = text.replace(',', '').replace(' ', '')
+    # 유럽식/DART식 천단위 구분자 (1.361.550) → 마침표 제거
+    if re.search(r'\d\.\d{3}\.', text):
+        text = re.sub(r'\.(?=\d{3})', '', text)
 
     m = re.search(r'([\d.]+)\s*억\s*원?', text)
     if m:
@@ -600,22 +609,43 @@ def parse_financials_pdf(md_text: str) -> dict:
             "rows": bs_rows,
         }
 
-    # IS 찾기: BS 다음에 손익계산서/포괄손익계산서
-    for i in range(bs_end, min(len(lines), bs_end + 30)):
+    # IS 찾기: 2가지 전략
+    # 전략 1: "손익계산서" 헤딩을 명시적으로 찾기
+    for i in range(bs_end, len(lines)):
         line = lines[i]
-        if '손익계산서' in line or '포괄손익' in line:
-            # 단위 재확인
-            for j in range(i, min(len(lines), i+5)):
+        line_nospace = line.replace(' ', '')
+        if '손익계산서' in line_nospace and '포괄' not in line_nospace:
+            for j in range(max(0, i-3), min(len(lines), i+8)):
                 m2 = re.search(r'단위\s*[：:]\s*(백만원|천원|억원|원)', lines[j])
                 if m2:
                     unit = m2.group(1)
                     break
-            # 테이블 시작
-            for j in range(i, min(len(lines), i+10)):
-                if '|' in lines[j] and ('과' in lines[j] or '매출' in lines[j] or '영업' in lines[j]):
+            for j in range(i, min(len(lines), i+15)):
+                if '|' in lines[j] and re.search(r'과|매출|매 출|영업|영 업|Ⅰ|순이자', lines[j]):
                     is_start = j
                     break
-            break
+            if is_start:
+                break
+
+    # 전략 2: 헤딩 없이 BS 다음에 바로 IS 테이블이 오는 경우
+    # BS 끝 이후 가까운 테이블에서 매출/영업/이자수익 계정이 있으면 IS로 판정
+    if not is_start:
+        for i in range(bs_end, min(len(lines), bs_end + 50)):
+            line = lines[i].strip()
+            if '|' in line and line.startswith('|'):
+                # 테이블 행의 첫 셀에 IS 핵심 계정이 있는지
+                cells = [c.strip().replace(' ', '') for c in line.split('|') if c.strip()]
+                if cells:
+                    acct = cells[0]
+                    if re.search(r'매출액|매출|영업수익|순이자손익|이자수익|Ⅰ\.매출|Ⅰ\.순이자', acct):
+                        # 단위: BS와 동일 사용
+                        is_start = i
+                        # 근처에 단위 있으면 업데이트
+                        for j in range(max(0, i-5), i):
+                            m3 = re.search(r'단위\s*[：:]\s*(백만원|천원|억원|원)', lines[j])
+                            if m3:
+                                unit = m3.group(1)
+                        break
 
     if is_start:
         is_rows, _ = _parse_financial_table(lines, is_start)
@@ -836,29 +866,37 @@ def parse_agenda_pdf(md_text: str) -> list[dict]:
     items = []
     seen_numbers = set()
 
-    # 소집공고 영역 찾기 (주주총회 소집공고 헤딩 이후)
+    # 소집공고 본문 영역 찾기
+    # 정정공고는 "정 정 신 고" → "주주총회소집공고" 순서
+    # 본문의 소집공고 시작점을 찾아야 함 (목차 아님)
     notice_start = 0
     for i, line in enumerate(lines):
-        if re.search(r'주\s*주\s*총\s*회\s*소\s*집\s*공\s*고', line):
+        line_nospace = line.replace(' ', '')
+        # "# 주주총회소집공고" 또는 "주 주 총 회 소 집 공 고" (헤딩)
+        if re.match(r'^#+\s*주주총회소집공고', line_nospace) or \
+           re.match(r'^#+\s*주\s*주\s*총\s*회', line):
             notice_start = i
-            break
+            # 더 아래에 또 있으면 (정정 preamble 다음의 본문) 그걸로 업데이트
+            continue
 
-    # 회의목적사항 영역 찾기
+    # 회의목적사항 영역 찾기 — notice_start 이후
     agenda_start = notice_start
-    for i in range(notice_start, min(len(lines), notice_start + 200)):
+    for i in range(notice_start, min(len(lines), notice_start + 300)):
         if re.search(r'회의.*목적|목적사항|결의사항|부의안건', lines[i]):
             agenda_start = i
             break
 
     # 안건 번호 패턴으로 추출
+    # "- ○ 제1호 의안: 정관 일부 변경의 건" 형태
     agenda_pattern = re.compile(
-        r'(?:□|○|◆|▶|\-\s*)?'          # 앞 장식
+        r'(?:□|○|◆|▶|\-\s*○?\s*)?'     # 앞 장식 (- ○ 포함)
         r'제\s*(\d+(?:-\d+)*)\s*호'      # 안건 번호
         r'\s*(?:의안)?[)）:\s]*'          # 구분자
         r'(.+)'                           # 제목
     )
 
-    for i in range(agenda_start, min(len(lines), agenda_start + 150)):
+    # 검색 범위: 목적사항 이후 300줄 (정정공고 포함 대형 문서 대응)
+    for i in range(agenda_start, min(len(lines), agenda_start + 300)):
         line = lines[i].strip()
         line = re.sub(r'^[-\s*□○◆▶]+', '', line)
 
