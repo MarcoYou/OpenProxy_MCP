@@ -28,6 +28,9 @@
 
 ### paid-open-proxy 파이프라인
 - [x] ~~run_pipeline.py에 PDF/OCR fallback 통합 (XML → PDF → OCR 자동 체이닝)~~
+- [x] ~~filing_tracker.json — 199개 기업 소집공고 이력 트래킹 (정정/최초/날짜)~~
+- [ ] run_pipeline에서 filing_tracker 연동 (최신 rcept_no 자동 사용, 종료 기업 스킵)
+- [ ] filing_tracker 자동 갱신 스크립트
 - [ ] 파서별 품질 판정 함수 (CASE_DEFINITION 기준)
 - [ ] 최선 결과 선택 로직 (XML vs PDF 비교)
 - [ ] DB 스키마 설계 (향후, PostgreSQL)

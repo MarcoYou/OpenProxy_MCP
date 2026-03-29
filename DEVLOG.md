@@ -2,6 +2,12 @@
 
 ## 2026-03-29
 
+### filing_tracker.json — 소집공고 이력 트래킹
+- 199개 기업 × filing 이력 (최초/정정/정정2차...)
+- 정정 있는 기업 69개, 2회+ 11개 (삼성바이오로직스 3회 최다)
+- 주총 종료 177개 / 예정 22개
+- run_pipeline에서 최신 rcept_no 자동 사용 가능
+
 ### 자기주식/자본준비금/퇴직금 파서 + 침범 방지
 - parse_treasury_share_xml: 보유/처분/소각 (93.6%, 침범 1건)
 - parse_capital_reserve_xml: 감소 금액 + reducedCapital 플래그 (100%, 침범 0건)
