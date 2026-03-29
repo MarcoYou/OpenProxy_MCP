@@ -163,48 +163,31 @@ open_proxy_mcp/
     client.py         # LLM fallback (Claude Sonnet / OpenAI)
 ```
 
-## Installation
+## Quick Start
 
 ```bash
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
+git clone https://github.com/MarcoYou/open-proxy-mcp.git
+cd open-proxy-mcp
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-# Configure environment variables
 cp .env.example .env
-# Edit .env with your API keys (OPENDART_API_KEY required)
 ```
 
-## Usage
-
-```bash
-# MCP server (stdio - Claude Code/Desktop)
-python -m open_proxy_mcp
-
-# SSE mode (web clients)
-python -m open_proxy_mcp --sse
-```
-
-### Environment Variables (.env)
+Edit `.env` and add your DART API key (get one free at [opendart.fss.or.kr](https://opendart.fss.or.kr)):
 
 ```
-OPENDART_API_KEY=...          # Required - DART API key
-OPENDART_API_KEY_2=...        # Optional - backup key (auto-switch on rate limit)
-ANTHROPIC_API_KEY=...         # Optional - LLM fallback (Claude)
-OPENAI_API_KEY=...            # Optional - LLM fallback (OpenAI)
-UPSTAGE_API_KEY=...           # Optional - OCR fallback (Upstage Document Parse)
+OPENDART_API_KEY=your_key_here
 ```
 
-### Claude Code (.mcp.json)
+### Connect to Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "open-proxy-mcp": {
-      "command": "python",
+      "command": "/path/to/open-proxy-mcp/.venv/bin/python",
       "args": ["-m", "open_proxy_mcp"],
       "cwd": "/path/to/open-proxy-mcp"
     }
@@ -212,9 +195,31 @@ UPSTAGE_API_KEY=...           # Optional - OCR fallback (Upstage Document Parse)
 }
 ```
 
-### First Use
+Restart Claude Desktop. Start a new chat and say: **"Call agm_guide first."**
 
-Tell your AI: "Call `agm_guide` first to read the usage guide."
+### Connect to Claude Code
+
+Add `.mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "open-proxy-mcp": {
+      "command": "/path/to/open-proxy-mcp/.venv/bin/python",
+      "args": ["-m", "open_proxy_mcp"],
+      "cwd": "/path/to/open-proxy-mcp"
+    }
+  }
+}
+```
+
+### Optional API Keys (.env)
+
+```
+OPENDART_API_KEY=...          # Required - get free at opendart.fss.or.kr
+OPENDART_API_KEY_2=...        # Optional - backup key (auto-switch on rate limit)
+UPSTAGE_API_KEY=...           # Optional - OCR fallback (Upstage Document Parse)
+```
 
 ## License
 
