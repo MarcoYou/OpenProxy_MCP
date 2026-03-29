@@ -1,8 +1,11 @@
 """주주총회 소집공고 관련 MCP tools"""
 
+import os
 import json
 import logging
 import re
+import glob
+import tempfile
 from datetime import datetime
 
 
@@ -94,20 +97,19 @@ logger = logging.getLogger(__name__)
 
 # ── PDF 캐시 (디스크) ──
 
-import os as _os_module
-_PDF_CACHE_DIR = _os_module.path.join(
-    _os_module.path.dirname(_os_module.path.dirname(_os_module.path.dirname(__file__))), "cache", "pdf"
+_PDF_CACHE_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "cache", "pdf"
 )
-_PDF_MD_CACHE_DIR = _os_module.path.join(
-    _os_module.path.dirname(_os_module.path.dirname(_os_module.path.dirname(__file__))), "cache", "pdf_parsed"
+_PDF_MD_CACHE_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "cache", "pdf_parsed"
 )
 
 
 async def _get_pdf_cached(rcept_no: str) -> bytes:
     """PDF 바이너리를 디스크 캐시에서 가져오거나 다운로드"""
-    _os_module.makedirs(_PDF_CACHE_DIR, exist_ok=True)
-    path = _os_module.path.join(_PDF_CACHE_DIR, f"{rcept_no}.pdf")
-    if _os.path.exists(path):
+    os.makedirs(_PDF_CACHE_DIR, exist_ok=True)
+    path = os.path.join(_PDF_CACHE_DIR, f"{rcept_no}.pdf")
+    if os.path.exists(path):
         with open(path, "rb") as f:
             return f.read()
     client = DartClient()
@@ -119,9 +121,9 @@ async def _get_pdf_cached(rcept_no: str) -> bytes:
 
 def _get_pdf_markdown_cached(rcept_no: str, pdf_bytes: bytes) -> str:
     """opendataloader 마크다운을 디스크 캐시에서 가져오거나 파싱"""
-    _os_module.makedirs(_PDF_MD_CACHE_DIR, exist_ok=True)
-    md_path = _os_module.path.join(_PDF_MD_CACHE_DIR, f"{rcept_no}.md")
-    if _os.path.exists(md_path):
+    os.makedirs(_PDF_MD_CACHE_DIR, exist_ok=True)
+    md_path = os.path.join(_PDF_MD_CACHE_DIR, f"{rcept_no}.md")
+    if os.path.exists(md_path):
         with open(md_path, "r") as f:
             return f.read()
 
@@ -143,44 +145,41 @@ def _get_pdf_markdown_cached(rcept_no: str, pdf_bytes: bytes) -> str:
             table_method="cluster",
         )
         # opendataloader는 입력 파일명 기준으로 출력 — rename 필요
-        import glob
-        generated = glob.glob(_os.path.join(_PDF_MD_CACHE_DIR, "*.md"))
+        generated = glob.glob(os.path.join(_PDF_MD_CACHE_DIR, "*.md"))
         for g in generated:
-            if _os.path.basename(g).startswith("tmp"):
-                _os_module.rename(g, md_path)
+            if os.path.basename(g).startswith("tmp"):
+                os.rename(g, md_path)
                 break
     finally:
-        _os_module.unlink(tmp_path)
+        os.unlink(tmp_path)
 
-    if _os.path.exists(md_path):
+    if os.path.exists(md_path):
         with open(md_path, "r") as f:
             return f.read()
     return ""
 
 # ── 문서 캐시 (메모리 + 디스크) ──
 
-import os as _os
-import hashlib as _hashlib
 
 _doc_cache: dict[str, dict] = {}
 _MAX_CACHE = 30
-_DISK_CACHE_DIR = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))), "cache")
+_DISK_CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "cache")
 
 
 def _disk_cache_path(rcept_no: str) -> str:
-    return _os.path.join(_DISK_CACHE_DIR, f"{rcept_no}.json")
+    return os.path.join(_DISK_CACHE_DIR, f"{rcept_no}.json")
 
 
 def _load_from_disk(rcept_no: str) -> dict | None:
     path = _disk_cache_path(rcept_no)
-    if _os.path.exists(path):
+    if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     return None
 
 
 def _save_to_disk(rcept_no: str, doc: dict):
-    _os_module.makedirs(_DISK_CACHE_DIR, exist_ok=True)
+    os.makedirs(_DISK_CACHE_DIR, exist_ok=True)
     path = _disk_cache_path(rcept_no)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(doc, f, ensure_ascii=False)
