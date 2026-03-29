@@ -33,6 +33,9 @@ _PARSER_KEYWORDS = {
     "pers": ['후보자성명', '세부경력', '주된직업'],
     "fin": ['자산총계', '유동자산', '재무상태표'],
     "aoi": ['변경전', '변경후', '현행', '개정'],
+    "treasury": ['자기주식', '자사주', '자본감소'],
+    "capital": ['자본준비금', '이익잉여금', '전입'],
+    "retirement": ['퇴직금', '퇴직위로금', '현행', '개정'],
 }
 
 
@@ -1075,6 +1078,275 @@ def parse_aoi_pdf(md_text: str) -> dict:
             amendments.append({
                 "subAgendaId": "",
                 "label": reason or clause,
+                "clause": clause,
+                "before": before_text,
+                "after": after_text,
+                "reason": reason,
+            })
+            i += 1
+
+        i += 1
+
+    summary = {"totalAmendments": len(amendments)}
+    return {"amendments": amendments, "summary": summary}
+
+
+# ── 자기주식 파서 ──
+
+def parse_treasury_share_pdf(md_text: str) -> dict:
+    """PDF 마크다운에서 자기주식/자사주/자본감소 테이블 추출
+
+    패턴:
+      - "자기주식" / "자사주" / "자본감소" 키워드 포함 섹션
+      - 주식수, 취득/처분/소각 내역 테이블
+    """
+    lines = md_text.split('\n')
+    items = []
+
+    _TREASURY_KW = ['자기주식', '자사주', '자본감소']
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+
+        # 자기주식 관련 헤딩/키워드 섹션 찾기
+        if not any(kw in line for kw in _TREASURY_KW):
+            i += 1
+            continue
+
+        # 헤딩이면 제목 추출
+        title = line.lstrip('#').strip() if line.startswith('#') else line.strip()
+
+        # 유형 분류
+        item_type = "cancel" if any(kw in title for kw in ['소각', '감소']) else "hold_dispose"
+
+        tables = []
+        shares_info = []
+        notes = []
+        purpose = ""
+
+        # 이 섹션에서 테이블과 텍스트 수집 (최대 80줄)
+        j = i + 1
+        search_end = min(len(lines), j + 80)
+        while j < search_end:
+            jline = lines[j].strip()
+
+            # 다음 주요 섹션 시작이면 종료
+            if jline.startswith('#') and not any(kw in jline for kw in _TREASURY_KW):
+                break
+
+            # 테이블 감지
+            if jline.startswith('|') and '|' in jline[1:]:
+                rows, end_j = _parse_md_table_rows(lines, j)
+                if rows and len(rows) >= 2:
+                    tables.append({
+                        "headers": rows[0],
+                        "rows": rows[1:],
+                    })
+                    # 주식수 추출
+                    for row in rows[1:]:
+                        for cell in row:
+                            m = re.search(r'([\d,]+)\s*주', cell)
+                            if m:
+                                shares_info.append(cell.strip())
+                j = end_j
+                continue
+
+            # 목적 추출
+            if '목적' in jline and not purpose:
+                purpose = jline[:200]
+
+            # 주석
+            if jline.startswith('※') or (jline.startswith('*') and len(jline) > 2):
+                notes.append(jline)
+
+            j += 1
+
+        if tables or shares_info:
+            items.append({
+                "number": "",
+                "title": title[:100],
+                "type": item_type,
+                "purpose": purpose,
+                "sharesInfo": shares_info[:5],
+                "schedule": [],
+                "tables": tables,
+                "notes": notes,
+            })
+
+        i = max(i + 1, j)
+
+    return {"items": items, "summary": {"totalItems": len(items)}}
+
+
+# ── 자본준비금 파서 ──
+
+def parse_capital_reserve_pdf(md_text: str) -> dict:
+    """PDF 마크다운에서 자본준비금 감소/이익잉여금 전입 정보 추출
+
+    패턴:
+      - "자본준비금" 키워드 포함 섹션
+      - 금액 (N조원, N억원 등) 추출
+    """
+    lines = md_text.split('\n')
+    items = []
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+
+        if '자본준비금' not in line:
+            i += 1
+            continue
+
+        # 재무제표 섹션이면 스킵
+        if any(kw in line for kw in ['재무제표', '재무상태표', '대차대조표']):
+            i += 1
+            continue
+
+        title = line.lstrip('#').strip() if line.startswith('#') else line.strip()
+
+        amount = None
+        purpose = ""
+        notes = []
+
+        # 섹션 내에서 금액/목적 수집
+        j = i + 1
+        search_end = min(len(lines), j + 60)
+        while j < search_end:
+            jline = lines[j].strip()
+
+            if jline.startswith('#') and '자본준비금' not in jline:
+                break
+
+            # 금액 추출
+            if not amount:
+                m = re.search(r'([\d,.]+)\s*(조|억|백만|천)?\s*원', jline)
+                if m:
+                    amount = m.group(0).strip()
+
+            # 목적 추출
+            if not purpose and ('목적' in jline or '이입' in jline or '전입' in jline):
+                purpose = jline[:300]
+
+            # 주석
+            if jline.startswith('※') or (jline.startswith('*') and len(jline) > 2):
+                notes.append(jline)
+
+            j += 1
+
+        if amount or purpose:
+            items.append({
+                "number": "",
+                "title": title[:100],
+                "amount": amount,
+                "purpose": purpose,
+                "notes": notes,
+            })
+
+        i = max(i + 1, j)
+
+    return {"items": items, "summary": {"totalItems": len(items)}}
+
+
+# ── 퇴직금 규정 파서 ──
+
+def parse_retirement_pay_pdf(md_text: str) -> dict:
+    """PDF 마크다운에서 퇴직금 규정 현행/개정안 비교 테이블 추출
+
+    정관변경(aoi)과 같은 패턴: 현행/변경전 vs 개정안/변경후 비교 테이블
+    """
+    lines = md_text.split('\n')
+    amendments = []
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+
+        # 변경전/변경후 테이블 헤더 감지 (aoi 패턴 재사용)
+        is_header = False
+        before_col = -1
+        after_col = -1
+        reason_col = -1
+
+        if '|' in line:
+            cells = [c.strip().replace(' ', '') for c in line.split('|') if c.strip()]
+            for ci, cell in enumerate(cells):
+                if '변경전' in cell or '현행' == cell:
+                    before_col = ci
+                    is_header = True
+                if '변경후' in cell or '변경(안)' in cell.replace(' ', '') or '개정안' in cell or '개정' == cell:
+                    after_col = ci
+                    is_header = True
+                if '목적' in cell or '비고' in cell or '사유' in cell:
+                    reason_col = ci
+
+        # 퇴직금 컨텍스트 확인: 앞 20줄에 퇴직금 키워드가 있는지
+        if is_header and before_col >= 0 and after_col >= 0:
+            context_start = max(0, i - 20)
+            context_text = ' '.join(lines[context_start:i])
+            if '퇴직금' not in context_text and '퇴직위로금' not in context_text:
+                # 컨텍스트에 퇴직금 없으면 스킵 (정관변경 등 다른 테이블일 수 있음)
+                i += 1
+                continue
+        else:
+            i += 1
+            continue
+
+        # 구분선 스킵
+        i += 1
+        if i < len(lines) and '---' in lines[i]:
+            i += 1
+
+        # 데이터 행 파싱
+        while i < len(lines):
+            row_line = lines[i].strip()
+
+            if not row_line:
+                i += 1
+                if i < len(lines) and not lines[i].strip():
+                    i += 1
+                continue
+
+            if not row_line.startswith('|'):
+                i += 1
+                continue
+
+            if '---' in row_line:
+                i += 1
+                continue
+
+            # 멀티라인 합치기
+            full_line = row_line
+            while not full_line.rstrip().endswith('|') and i + 1 < len(lines):
+                i += 1
+                next_line = lines[i].strip()
+                if next_line.startswith('|') and '---' in next_line:
+                    break
+                full_line += ' ' + next_line
+
+            cells = [c.strip() for c in full_line[1:-1].split('|')] if full_line.rstrip().endswith('|') else []
+            if not cells or len(cells) <= max(before_col, after_col):
+                i += 1
+                continue
+
+            before_text = _clean_br(cells[before_col]) if before_col < len(cells) else ''
+            after_text = _clean_br(cells[after_col]) if after_col < len(cells) else ''
+            reason = _clean_br(cells[reason_col]) if reason_col >= 0 and reason_col < len(cells) else ''
+
+            if before_text in ['-', ''] and after_text in ['-', '']:
+                i += 1
+                continue
+
+            # 조항 추출
+            clause = ''
+            for text in [before_text, after_text]:
+                m = re.search(r'제\s*\d+\s*조\s*(?:\([^)]*\))?', text)
+                if m:
+                    clause = m.group(0).strip()
+                    break
+
+            amendments.append({
                 "clause": clause,
                 "before": before_text,
                 "after": after_text,
