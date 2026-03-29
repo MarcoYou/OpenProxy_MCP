@@ -51,6 +51,18 @@ agm_steward(ticker)  ← 오케스트레이터 (한 번에 요약)
 | `agm_aoi_change` | 정관변경 변경전/변경후 비교 | rcept_no, format |
 | `agm_compensation` | 보수한도 당기/전기 비교 | rcept_no, format |
 | `agm_steward` | 종합 오케스트레이터 (위 tool 자동 조합) | ticker, bgn_de, end_de |
+| `agm_guide` | AI 어시스턴트용 사용 가이드 (flow + 판정 기준) | - |
+
+### PDF / OCR Fallback Tools
+
+XML 파싱 실패 시 AI가 자율적으로 호출하는 fallback tool:
+
+| Tool | 소스 | 설명 |
+|------|------|------|
+| `agm_*_pdf` | opendataloader | PDF 다운로드 + 파싱 (4초+). XML 실패 시 시도. |
+| `agm_*_ocr` | Upstage OCR | PDF 이미지 OCR (가장 느림). PDF도 실패 시 시도. UPSTAGE_API_KEY 필요. |
+
+대상: `agm_agenda`, `agm_financials`, `agm_personnel`, `agm_aoi_change`, `agm_compensation`
 
 ### 공통 옵션
 
@@ -132,7 +144,7 @@ get_document(rcept_no)
 open_proxy_mcp/
   server.py           # FastMCP 서버 진입점 (stdio + SSE)
   tools/
-    shareholder.py    # MCP tool 11개 + 포매터 + format_krw
+    shareholder.py    # MCP tool 23개 + 포매터 + format_krw
     parser.py         # 파서 (bs4+regex) — 안건/재무/인사/정관/보수/정정
   dart/
     client.py         # OpenDART API + 웹 PDF 다운로드 (rate limiter 내장)
