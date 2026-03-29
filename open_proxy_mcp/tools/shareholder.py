@@ -1026,10 +1026,10 @@ def register_tools(mcp):
     async def agm_guide() -> str:
         """이 MCP 서버 사용 가이드. 처음 사용 시 먼저 호출하세요.
 
-        tool 구조, fallback 흐름, 성공 판정 기준을 반환합니다.
+        tool 구조, fallback 흐름, 성공 판정 기준 + 성공 예시를 반환합니다.
         AI 어시스턴트가 이 가이드를 읽고 적절한 tool을 선택하도록 돕습니다.
         """
-        return """# OpenProxy MCP 사용 가이드
+        guide = """# OpenProxy MCP 사용 가이드
 
 ## Tool 구조
 
@@ -1048,39 +1048,33 @@ OCR fallback tool (PDF도 실패 시, 가장 느림, UPSTAGE_API_KEY 필요):
 
 ## Fallback 흐름
 
-1. 기본 tool 호출 (예: agm_personnel_xml)
-2. 결과 확인:
-   - 정상이면 → 사용자에게 답변
-   - 비어있거나 품질 이슈 → 사용자에게 "XML 파싱이 불완전합니다. PDF로 재시도할까요?" 안내
-3. 사용자 동의 → _pdf tool 호출 (예: agm_personnel_pdf)
-4. 여전히 실패 → "OCR로 한번 더 시도해볼까요?" 안내
-5. 사용자 동의 → _ocr tool 호출 (예: agm_personnel_ocr)
-
-## 품질 판정 기준
-
-### agm_personnel
-- 정상: appointments >= 1, 후보자 이름 2-10자, 경력 1건 이상
-- 불완전: 경력이 100자 이상 한 줄로 병합, 경력 0건
-- 실패: appointments 비어있음, 이름이 "제N조" 형태
-
-### agm_financials
-- 정상: BS 5행 이상 + IS 3행 이상
-- 실패: BS/IS 모두 없음
-
-### agm_aoi_change
-- 정상: amendments >= 1, 변경전/변경후 텍스트 있음
-- 실패: amendments 비어있음
-
-### agm_compensation
-- 정상: items >= 1, limitAmount > 0
-- 불완전: items 있지만 limitAmount 없음
-- 실패: items 비어있음
+1. 기본 _xml tool 호출 (예: agm_personnel_xml)
+2. 결과 확인 — 아래 Case Definitions의 판정 기준 참고
+3. 정상이면 → 사용자에게 답변
+4. 불완전하면 → 사용자에게 "파싱이 불완전합니다. PDF로 재시도할까요?" 안내
+5. 사용자 동의 → _pdf tool 호출 (예: agm_personnel_pdf)
+6. 여전히 실패 → "OCR로 한번 더 시도해볼까요?" 안내
+7. 사용자 동의 → _ocr tool 호출 (예: agm_personnel_ocr)
 
 ## 주의사항
 - _pdf tool은 DART 웹에서 PDF를 다운로드하므로 시간이 걸립니다 (4초+)
 - _ocr tool은 Upstage API를 호출하므로 UPSTAGE_API_KEY가 필요합니다
 - 해당 안건 자체가 없는 경우 빈 결과는 정상입니다 (예: 보수한도 안건이 없는 기업)
+
+---
+
 """
+        # CASE_DEFINITION.md 내용 포함 (성공 예시 + 판정 기준)
+        case_def_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "CASE_DEFINITION.md"
+        )
+        try:
+            with open(case_def_path, "r") as f:
+                case_def = f.read()
+            return guide + case_def
+        except FileNotFoundError:
+            return guide + "\n(CASE_DEFINITION.md를 찾을 수 없습니다)"
 
     @mcp.tool()
     async def agm_personnel_pdf(
