@@ -106,7 +106,7 @@ AI calls agm_personnel_xml(rcept_no)
 | Financials BS | 97.4% | 97.9% | 100% |
 | Financials IS | 100% | 95.7% | 100% |
 | Personnel | 98.9% | 97.9% | 100% |
-| Charter changes | 97.8% | 99.0% | 100% |
+| AOI changes | 97.8% | 99.0% | 100% |
 | Compensation | 98.4% | 99.5% | 100% |
 | Treasury shares | 93.6% | 100% | 100% |
 | Capital reserve | 100% | 100% | 100% |
