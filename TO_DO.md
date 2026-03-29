@@ -2,6 +2,13 @@
 
 ## 해야 할 일
 
+### DXT 패키징 (free-open-proxy 배포)
+- [ ] manifest.json 작성 (user_config: DART API 키, Upstage API 키)
+- [ ] 프로젝트 구조를 DXT 형태로 재구성
+- [ ] icon.png 제작
+- [ ] DXT 빌드 + 테스트 (Claude Desktop 설치 확인)
+- [ ] 배포 (GitHub Release에 .dxt 파일 첨부)
+
 ### 파서 미해결 케이스
 - [ ] 안건번호=후보자이름 17건 — 파서 근본 수정 필요
 - [ ] 정관텍스트=후보자 4건 — 파서 수정
