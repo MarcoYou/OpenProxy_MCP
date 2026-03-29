@@ -2858,3 +2858,215 @@ def _empty_compensation_summary() -> dict:
         "priorTotalLimit": None,
         "priorUtilization": None,
     }
+
+
+# ── 자기주식 파싱 ──
+
+_TREASURY_KEYWORDS = ['자기주식', '자사주']
+_TREASURY_CANCEL_KW = ['소각', '자본금 감소', '자본감소']
+
+
+def parse_treasury_xml(html: str) -> dict:
+    """자기주식 보유/처분/소각 안건 파싱
+
+    Returns:
+        {"items": [...], "summary": {...}}
+        각 item: {"type", "title", "purpose", "shares", "schedule", "tables", "notes"}
+    """
+    details = parse_agenda_details_xml(html)
+    if not details:
+        return {"items": [], "summary": {"totalItems": 0}}
+
+    items = []
+
+    for d in details:
+        title = d.get("title", "")
+        if not any(kw in title for kw in _TREASURY_KEYWORDS):
+            continue
+
+        # 유형 분류
+        item_type = "cancel" if any(kw in title for kw in _TREASURY_CANCEL_KW) else "hold_dispose"
+
+        purpose = ""
+        shares_info = []
+        schedule = []
+        tables = []
+        notes = []
+
+        for sec in d.get("sections", []):
+            heading = sec.get("heading") or ""
+
+            for block in sec.get("blocks", []):
+                btype = block["type"]
+                content = block["content"].strip()
+
+                if btype == "text":
+                    # 목적 추출
+                    if "목적" in heading and not purpose:
+                        purpose = content[:200]
+                    # 스케줄 추출
+                    if any(kw in heading for kw in ["기간", "시기", "시점"]):
+                        schedule.append(content[:200])
+                elif btype == "table":
+                    rows = _parse_md_table(content)
+                    if rows and len(rows) >= 2:
+                        tables.append({
+                            "headers": rows[0],
+                            "rows": rows[1:],
+                        })
+                        # 주식수 추출 시도
+                        for row in rows[1:]:
+                            for cell in row:
+                                m = re.search(r'([\d,]+)\s*주', cell)
+                                if m:
+                                    shares_info.append(cell.strip())
+                elif btype == "note":
+                    notes.append(content)
+
+            # heading에서 목적 추출
+            if "목적" in heading and not purpose:
+                purpose = heading[:200]
+
+        item = {
+            "number": d.get("number", ""),
+            "title": title,
+            "type": item_type,
+            "purpose": purpose,
+            "sharesInfo": shares_info[:5],
+            "schedule": schedule,
+            "tables": tables,
+            "notes": notes,
+        }
+        items.append(item)
+
+    return {"items": items, "summary": {"totalItems": len(items)}}
+
+
+# ── 자본준비금 파싱 ──
+
+def parse_capital_reserve_xml(html: str) -> dict:
+    """자본준비금 감소/이익잉여금 전입 안건 파싱
+
+    Returns:
+        {"items": [...], "summary": {...}}
+    """
+    details = parse_agenda_details_xml(html)
+    if not details:
+        return {"items": [], "summary": {"totalItems": 0}}
+
+    items = []
+
+    for d in details:
+        title = d.get("title", "")
+        if "자본준비금" not in title and "이익잉여금" not in title:
+            continue
+        # 재무제표 안건은 제외
+        if any(kw in title for kw in ["재무제표", "재무상태표", "대차대조표"]):
+            continue
+
+        amount = None
+        purpose = ""
+        notes = []
+
+        for sec in d.get("sections", []):
+            for block in sec.get("blocks", []):
+                content = block["content"].strip()
+
+                if block["type"] == "text":
+                    # 금액 추출 (N조원, N억원, N원)
+                    if not amount:
+                        m = re.search(r'([\d,.]+)\s*(조|억|백만|천)?\s*원', content)
+                        if m:
+                            amount = m.group(0).strip()
+                    # 목적 추출
+                    if not purpose and ("목적" in content or "이입" in content or "전입" in content):
+                        purpose = content[:300]
+                elif block["type"] == "note":
+                    notes.append(content)
+
+        item = {
+            "number": d.get("number", ""),
+            "title": title,
+            "amount": amount,
+            "purpose": purpose,
+            "notes": notes,
+        }
+        items.append(item)
+
+    return {"items": items, "summary": {"totalItems": len(items)}}
+
+
+# ── 퇴직금 규정 파싱 ──
+
+def parse_retirement_xml(html: str) -> dict:
+    """임원 퇴직금 규정 개정 안건 파싱 (변경전/변경후 테이블)
+
+    정관변경(aoi)과 같은 패턴: 현행/개정안 비교 테이블
+    Returns:
+        {"amendments": [...], "summary": {...}}
+    """
+    details = parse_agenda_details_xml(html)
+    if not details:
+        return {"amendments": [], "summary": {"totalAmendments": 0}}
+
+    amendments = []
+
+    for d in details:
+        title = d.get("title", "")
+        if "퇴직금" not in title and "퇴직위로금" not in title:
+            continue
+
+        for sec in d.get("sections", []):
+            for block in sec.get("blocks", []):
+                if block["type"] != "table":
+                    continue
+
+                rows = _parse_md_table(block["content"])
+                if len(rows) < 2:
+                    continue
+
+                headers = rows[0]
+                headers_clean = [re.sub(r'\s+', '', h) for h in headers]
+
+                # 현행/변경전 + 개정/변경후 컬럼 찾기
+                before_idx = -1
+                after_idx = -1
+                reason_idx = -1
+
+                for ci, h in enumerate(headers_clean):
+                    if any(kw in h for kw in ['변경전', '현행', '현행']):
+                        before_idx = ci
+                    if any(kw in h for kw in ['변경후', '개정안', '개정']):
+                        after_idx = ci
+                    if any(kw in h for kw in ['목적', '비고', '사유']):
+                        reason_idx = ci
+
+                if before_idx < 0 or after_idx < 0:
+                    continue
+
+                for row in rows[1:]:
+                    if len(row) <= max(before_idx, after_idx):
+                        continue
+                    before = row[before_idx].strip()
+                    after = row[after_idx].strip()
+                    reason = row[reason_idx].strip() if reason_idx >= 0 and reason_idx < len(row) else ""
+
+                    if not before and not after:
+                        continue
+
+                    # 조항 추출
+                    clause = ""
+                    for text in [before, after]:
+                        m = re.search(r'제\s*\d+\s*조', text)
+                        if m:
+                            clause = m.group(0).strip()
+                            break
+
+                    amendments.append({
+                        "clause": clause,
+                        "before": before,
+                        "after": after,
+                        "reason": reason,
+                    })
+
+    return {"amendments": amendments, "summary": {"totalAmendments": len(amendments)}}
