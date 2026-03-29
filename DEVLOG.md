@@ -1,5 +1,39 @@
 # Dev Log
 
+## 2026-03-29
+
+### PDF 파서 3회 개선 루프 (pdf_parser.py)
+- 5개 파서 구현: parse_compensation_pdf, parse_personnel_pdf, parse_financials_pdf, parse_aoi_pdf, parse_agenda_pdf
+- 파서 네이밍 _xml/_pdf 구분 리팩토링
+
+**성능 추이 (v1 → 최종, KOSPI 200 198건):**
+- compensation: 88.9% → 97.5%
+- personnel: 89.9% → 93.9% (후보자 중복 67건 → 0건)
+- financials BS: 82.3% → 96.0%
+- financials IS: 12.6% → 93.9%
+- aoi: 76.3% → 97.0% (멀티라인 셀 합치기)
+- agenda: 80.3% → 97.5% (장식 패턴 15종 대응)
+
+**핵심 개선:**
+- IS 감지: BS 이후 매출/영업이익/순이자 계정으로 자동 판별
+- BS 오감지 방지: 거래내역 테이블 제외
+- aoi 멀티라인: |로 시작하지만 끝나지 않는 행 연결
+- agenda 장식: ○●■, (N), ①②, 가.나., 1) 등 다양한 prefix
+- personnel dedup: 같은 이름은 경력 많은 쪽 유지
+
+**남은 실패 (파서로 해결 불가 — 원본 구조 문제):**
+- agenda 5건, comp 5건, personnel 12건, BS 8건, IS 12건, aoi 6건
+- PDF 원본에 데이터 자체가 없거나 opendataloader 변환 품질 문제
+
+### XML vs PDF 비교 분석
+- 198개 전체 비교: xml_vs_pdf_comparison.json
+- XML 1차 + PDF 보강이 최적 전략으로 확인
+- PDF-only 전환 시 financials/agenda에서 역효과
+
+### 프론트엔드
+- DART 원문 보기 버튼 (개요탭, rceptNo 직링크)
+- pipeline JSON 198개에 rceptNo 패치
+
 ## 2026-03-28
 
 ### agm_compensation 신규 tool

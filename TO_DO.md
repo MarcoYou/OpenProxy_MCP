@@ -20,9 +20,12 @@
 - [ ] 프록시 파이트 분석 연계
 
 ### PDF 파싱 보조 소스
-- [ ] opendataloader-pdf 설치 + DART PDF 파싱 품질 테스트
-- [ ] XML 파싱 실패 시 PDF fallback 파이프라인 구현
+- [x] ~~opendataloader-pdf 설치 + DART PDF 파싱 품질 테스트~~
+- [x] ~~PDF 파서 5개 구현 (pdf_parser.py) — comp 97.5%, pers 93.9%, BS 96%, IS 93.9%, aoi 97%, agenda 97.5%~~
+- [x] ~~198개 전체 PDF 다운로드 + opendataloader 파싱~~
+- [ ] XML 파싱 실패 시 PDF fallback 파이프라인 구현 (shareholder.py에 통합)
 - [ ] LLM fallback에 XML+PDF 동시 전달 구조
+- [ ] PDF 파서 남은 실패 케이스 개선 (agenda 5건, comp 5건 등)
 
 ### 이미지 인덱싱 + OCR 파이프라인
 - [ ] parse_agenda_details에서 이미지 메타데이터 인덱싱 (파일명, 위치, 카테고리)
