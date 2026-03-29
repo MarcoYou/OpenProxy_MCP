@@ -2,148 +2,152 @@
 
 [English README](README.md)
 
-DART 공시 데이터를 AI 에이전트에서 쉽게 활용할 수 있게 해주는 MCP (Model Context Protocol) 서버.
+DART 주주총회 소집공고를 AI가 바로 활용할 수 있는 구조화된 데이터로 변환하는 MCP 서버.
 
-## 목표
+> **주주총회 공시 문서를 몇 초 만에 구조화된 데이터로 — 수작업 분석이 아닌 AI 자동 파싱.**
 
-- 주주총회 소집공고를 구조화하여 쉽게 읽고 활용할 수 있게 제공
-- DART 재무정보, 공시 데이터와의 연동 확장
-- Claude Desktop, Claude Code 등 MCP 클라이언트에서 tool로 사용 가능
+![OpenProxy MCP 비교](test_screenshots/openproxy_mcp_compare.png)
+
+## 왜 OpenProxy인가?
+
+패시브 투자의 확대로 의결권 행사의 중요성이 커지고 있지만, 주주총회 분석은 여전히 수작업에 의존합니다. 기관투자자는 내부 팀과 외부 자문사에 의존하고, 대부분의 투자자는 구조화된 의결권 정보에 접근할 수 없습니다.
+
+OpenProxy는 DART 공시 문서를 AI가 바로 읽을 수 있는 구조화 데이터로 변환하여, 누구나 일관되고 체계적인 의결권 분석을 할 수 있게 합니다.
+
+## 파싱이 왜 중요한가
+
+DART 소집공고는 100페이지 이상의 HTML 문서로, 규제 양식/재무 주석/실제 의결 안건이 뒤섞여 있습니다. "CEO 보수한도가 얼마인지" 알려면 수천 줄을 읽어야 합니다.
+
+**원본 (DART 공시):**
+```
+가. 이사의 수ㆍ보수총액 내지 최고 한도액
+당 기(제58기, 2026년)
+이사의 수 (사외이사수) 8(    5    )
+보수총액 또는 최고한도액 450억원
+전 기(제57기, 2025년)
+이사의 수 (사외이사수) 10(    6    )
+실제 지급된 보수총액 287억원
+최고한도액 360억원
+※ 당기(제58기) 보수 한도 총액 450억 : 일반보수 260억 ...
+```
+
+**OpenProxy 결과:**
+```json
+{
+  "current": {"headcount": "8(5)", "limit": "450억원", "limitAmount": 45000000000},
+  "prior": {"actualPaid": "287억원", "limit": "360억원"},
+  "priorUtilization": 79.7
+}
+```
+
+API 한 번 호출. 구조화 완료. 바로 분석 가능.
 
 ## 데이터 소스
 
-- [OpenDART API](https://opendart.fss.or.kr/) — 금융감독원 전자공시시스템
+- [OpenDART API](https://opendart.fss.or.kr/) - 금융감독원 전자공시시스템
 
-## MCP Tools
+## MCP Tool (31개)
 
 ```
-agm_steward(ticker)  ← 오케스트레이터 (한 번에 요약)
-│
-├─ agm_search(ticker)        소집공고 검색 + 정정 태깅
-├─ agm_info(rcept_no)        회의 정보 + 정정 요약
-├─ agm_agenda_xml(rcept_no)  안건 제목 트리 (세부의안 포함)
-├─ agm_corrections(rcept_no) 정정 전/후 비교
-│
-├─ agm_items(rcept_no)       안건 본문 블록 (범용 raw)
-│   ├─ agm_financials_xml    재무제표 정규화 (BS/IS/자본변동표/처분계산서)
-│   ├─ agm_personnel_xml     이사/감사 선임·해임 정규화
-│   ├─ agm_aoi_change_xml    정관변경 정규화 (변경전/변경후 비교)
-│   └─ agm_compensation_xml  보수한도 정규화 (당기 한도/전기 실지급)
-│
-└─ agm_document(rcept_no)    원문 텍스트
+agm_steward(ticker)          <- 종합 오케스트레이터
+|
++-- agm_search(ticker)            소집공고 검색
++-- agm_info(rcept_no)            회의 정보 (일시/장소)
++-- agm_agenda_xml(rcept_no)      안건 트리 (세부의안 포함)
++-- agm_corrections(rcept_no)     정정 전/후 비교
+|
++-- agm_items(rcept_no)           안건 본문 블록 (범용)
+|   +-- agm_financials_xml        재무제표 (BS/IS)
+|   +-- agm_personnel_xml         이사/감사 선임·해임
+|   +-- agm_aoi_change_xml        정관변경 (변경전/변경후)
+|   +-- agm_compensation_xml      보수한도 (당기/전기)
+|   +-- agm_treasury_share_xml    자기주식 보유/처분/소각
+|   +-- agm_capital_reserve_xml   자본준비금 감소
+|   +-- agm_retirement_pay_xml    퇴직금 규정 개정
+|
++-- agm_document(rcept_no)        원문 텍스트
++-- agm_guide()                   AI 사용 가이드
 
 안건 유형별 tool 매핑:
-  재무제표 승인 → agm_financials_xml (테이블 정규화)
-  이사/감사 선임·해임 → agm_personnel_xml (후보자 정보)
-  정관변경 → agm_aoi_change_xml (변경전/변경후 비교)
-  보수한도 승인 → agm_compensation_xml (당기/전기 보수 비교)
-  자사주/기타 → agm_items (raw 블록)
+  재무제표 승인      -> agm_financials_xml
+  이사/감사 선임     -> agm_personnel_xml
+  정관변경          -> agm_aoi_change_xml
+  보수한도 승인      -> agm_compensation_xml
+  자기주식          -> agm_treasury_share_xml
+  자본준비금 감소     -> agm_capital_reserve_xml
+  퇴직금 규정       -> agm_retirement_pay_xml
+  기타             -> agm_items (raw 블록)
 ```
 
-| Tool | 기능 | 주요 파라미터 |
-|------|------|-------------|
-| `agm_search` | 종목코드/회사명으로 소집공고 검색 | ticker, bgn_de, end_de |
-| `agm_document` | 소집공고 본문 텍스트 반환 | rcept_no, max_length |
-| `agm_agenda_xml` | 안건 트리 파싱 (세부의안 포함) | rcept_no, use_llm, format |
-| `agm_info` | 회의 정보 (일시/장소/보고사항/전자투표) | rcept_no |
-| `agm_items` | 안건별 상세 내용 (테이블+텍스트) | rcept_no, agenda_no, use_llm, format |
-| `agm_financials_xml` | 재무제표 정규화 (BS/IS/자본변동표/처분계산서) | rcept_no, use_llm, format |
-| `agm_corrections` | 정정 전/후 비교 + 사유 | rcept_no, format |
-| `agm_personnel_xml` | 이사/감사 선임·해임 후보자 정보 | rcept_no, format |
-| `agm_aoi_change_xml` | 정관변경 변경전/변경후 비교 | rcept_no, format |
-| `agm_compensation_xml` | 보수한도 당기/전기 비교 | rcept_no, format |
-| `agm_steward` | 종합 오케스트레이터 (위 tool 자동 조합) | ticker, bgn_de, end_de |
-| `agm_guide` | AI 어시스턴트용 사용 가이드 (flow + 판정 기준) | - |
+### 3단계 Fallback (XML -> PDF -> OCR)
 
-### PDF / OCR Fallback Tools
-
-XML 파싱 실패 시 AI가 자율적으로 호출하는 fallback tool:
-
-| Tool | 소스 | 설명 |
-|------|------|------|
-| `agm_*_pdf` | opendataloader | PDF 다운로드 + 파싱 (4초+). XML 실패 시 시도. |
-| `agm_*_ocr` | Upstage OCR | PDF 이미지 OCR (가장 느림). PDF도 실패 시 시도. UPSTAGE_API_KEY 필요. |
-
-대상: `agm_agenda_xml`, `agm_financials_xml`, `agm_personnel_xml`, `agm_aoi_change_xml`, `agm_compensation_xml`
-
-### Fallback 흐름
+각 파서 tool에 `_xml`, `_pdf`, `_ocr` 변형이 있으며, AI가 자율적으로 판단하여 단계를 올립니다:
 
 ```
 AI가 agm_personnel_xml(rcept_no) 호출
-  → 정상 결과 → 답변
-  → 빈 결과 or 품질 이슈
-  → AI: "PDF로 재시도할게요" → agm_personnel_pdf(rcept_no)
-      → 정상 → 답변
-      → 실패 → AI: "OCR로 시도할게요" → agm_personnel_ocr(rcept_no)
+  -> 정상 결과 -> 답변
+  -> 빈 결과 or 품질 이슈
+  -> AI: "XML 파싱이 불완전합니다. PDF로 재시도할까요?"
+  -> agm_personnel_pdf(rcept_no) 호출
+      -> 정상 -> 답변
+      -> 실패 -> AI: "OCR로 시도할까요?" -> agm_personnel_ocr(rcept_no)
 ```
 
-### 공통 옵션
+| 단계 | 소스 | 속도 | 정확도 |
+|------|------|------|--------|
+| `_xml` | DART API (HTML/XML) | 빠름 | 98%+ |
+| `_pdf` | PDF 다운로드 + opendataloader | 4초+ | 98%+ |
+| `_ocr` | Upstage OCR API | 가장 느림 | 100% |
 
-| 파라미터 | 기본값 | 설명 |
-|----------|--------|------|
-| `format` | `"md"` | `"md"` (마크다운, LLM용) / `"json"` (프론트엔드용 v3 스키마) |
-| `use_llm` | `false` | 정규식 파싱 실패 시 LLM fallback 사용 여부 |
+## 파싱 성능 (KOSPI 200, 안건 tree 기반)
+
+| 파서 | XML | PDF | OCR |
+|------|-----|-----|-----|
+| 안건 목록 | 99.5% | 98.0% | 100% |
+| 재무상태표 | 97.4% | 97.9% | 100% |
+| 손익계산서 | 100% | 95.7% | 100% |
+| 이사/감사 선임 | 98.9% | 97.9% | 100% |
+| 정관변경 | 97.8% | 99.0% | 100% |
+| 보수한도 | 98.4% | 99.5% | 100% |
+| 자기주식 | 93.6% | 100% | 100% |
+| 자본준비금 | 100% | 100% | 100% |
+| 퇴직금 | 93.3% | 86.7% | 86.7% |
 
 ## 데이터 흐름
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  1단계: XML 파싱 (기본, 빠름)                            │
-│                                                          │
-│  DART API (document.xml ZIP)                             │
-│    → get_document(rcept_no)  {text, html, images}        │
-│    → parser.py (XML 파서)                                │
-│       ├─ parse_agenda_xml         안건 트리               │
-│       ├─ parse_financials_xml     재무제표                │
-│       ├─ parse_personnel_xml      인사 정보               │
-│       ├─ parse_aoi_xml            정관변경                │
-│       ├─ parse_compensation_xml   보수한도                │
-│       └─ bs4(lxml) 우선 → text regex fallback            │
-└──────────────────────────┬──────────────────────────────┘
-                           │ 실패 시
-┌──────────────────────────▼──────────────────────────────┐
-│  2단계: PDF 파싱 (느림, 4초+)                            │
-│                                                          │
-│  DART 웹 → PDF 다운로드 → opendataloader → 마크다운      │
-│    → pdf_parser.py (PDF 파서)                            │
-│       ├─ parse_agenda_pdf                                │
-│       ├─ parse_financials_pdf                            │
-│       ├─ parse_personnel_pdf                             │
-│       ├─ parse_aoi_pdf                                   │
-│       └─ parse_compensation_pdf                          │
-└──────────────────────────┬──────────────────────────────┘
-                           │ 실패 시
-┌──────────────────────────▼──────────────────────────────┐
-│  3단계: OCR (가장 느림, UPSTAGE_API_KEY 필요)            │
-│                                                          │
-│  키워드로 페이지 특정 → PDF 페이지 추출                   │
-│    → Upstage OCR API → 마크다운 → PDF 파서 재실행        │
-└─────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│  shareholder.py — MCP tool 레이어 (23개)                 │
-│                                                          │
-│  agm_*_xml  — 1단계 호출                                 │
-│  agm_*_pdf  — 2단계 호출 (AI가 자율 판단)                │
-│  agm_*_ocr  — 3단계 호출 (AI가 자율 판단)                │
-│  agm_guide  — AI용 사용 가이드                           │
-│                                                          │
-│  format="md" → LLM용 마크다운                            │
-│  format="json" → 프론트엔드용 v3 스키마                  │
-└─────────────────────────────────────────────────────────┘
++---------------------------------------------------------+
+|  1단계: XML 파싱 (기본, 빠름)                             |
+|                                                          |
+|  DART API (document.xml ZIP)                             |
+|    -> parser.py (XML 파서)                               |
+|       bs4(lxml) + regex fallback                         |
++----------------------------+-----------------------------+
+                             | 실패 시
++----------------------------v-----------------------------+
+|  2단계: PDF 파싱 (느림, 4초+)                             |
+|                                                          |
+|  DART 웹 -> PDF 다운로드 -> opendataloader -> 마크다운     |
+|    -> pdf_parser.py (PDF 파서)                           |
++----------------------------+-----------------------------+
+                             | 실패 시
++----------------------------v-----------------------------+
+|  3단계: OCR (가장 느림, UPSTAGE_API_KEY 필요)              |
+|                                                          |
+|  키워드로 페이지 특정 -> PDF 페이지 추출                    |
+|    -> Upstage OCR API -> 마크다운 -> PDF 파서 재실행       |
++---------------------------------------------------------+
+                             |
+                             v
++---------------------------------------------------------+
+|  shareholder.py - MCP Tool 레이어 (31개)                  |
+|                                                          |
+|  agm_*_xml  - 1단계                                      |
+|  agm_*_pdf  - 2단계 (AI 자율 판단)                        |
+|  agm_*_ocr  - 3단계 (AI 자율 판단)                        |
+|  agm_guide  - AI 사용 가이드 + 성공 기준                   |
++---------------------------------------------------------+
 ```
-
-## 파싱 성능 (KOSPI 200, 안건 tree 기반 실제 성공률)
-
-| 파서 | XML | PDF | OCR |
-|------|-----|-----|-----|
-| agenda | 99.5% | 98.0% | 100% |
-| financials BS | 97.4% | 97.9% | 100% |
-| financials IS | 100% | 95.7% | 100% |
-| personnel | 98.9% | 97.9% | 100% |
-| aoi (정관변경) | 97.8% | 99.0% | 100% |
-| compensation | 98.4% | 99.5% | 100% |
 
 ## 프로젝트 구조
 
@@ -151,69 +155,40 @@ AI가 agm_personnel_xml(rcept_no) 호출
 open_proxy_mcp/
   server.py           # FastMCP 서버 진입점 (stdio + SSE)
   tools/
-    shareholder.py    # MCP tool 23개 + 포매터 + format_krw
-    parser.py         # XML 파서 — parse_*_xml()
-    pdf_parser.py     # PDF 파서 — parse_*_pdf() + Upstage OCR fallback
+    shareholder.py    # MCP tool 31개 + 포매터
+    parser.py         # XML 파서 - parse_*_xml()
+    pdf_parser.py     # PDF 파서 - parse_*_pdf() + Upstage OCR fallback
   dart/
-    client.py         # OpenDART API + 웹 PDF 다운로드 (rate limiter 내장)
+    client.py         # OpenDART API + 웹 PDF 다운로드 (rate limiter)
   llm/
     client.py         # LLM fallback (Claude Sonnet / OpenAI)
-
-OpenProxy/            # 프론트엔드 (React/Vite) — git clone from HojiPark/openproxy
-  frontend/
-    src/data/
-      schema.ts       # v3 통합 스키마 타입
-      mockData.ts     # pipeline JSON → Company 객체 변환
-      pipeline/       # MCP에서 생성한 v3 JSON (KOSPI 200)
-    src/components/
-      AgendaAnalysis.tsx  # 안건 상세 렌더링
 ```
 
-## 설치
+## 빠른 시작
 
 ```bash
-# 가상환경 생성
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-
-# 의존성 설치
+git clone https://github.com/MarcoYou/open-proxy-mcp.git
+cd open-proxy-mcp
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-# 환경변수 설정
 cp .env.example .env
-# .env 파일에 API 키 입력 (OPENDART_API_KEY 필수, ANTHROPIC/OPENAI는 LLM fallback용)
 ```
 
-## 사용법
-
-```bash
-# MCP 서버 실행 (stdio — Claude Code/Desktop)
-python -m open_proxy_mcp
-
-# SSE 모드 (웹 연동, 기본 port 9000)
-python -m open_proxy_mcp --sse
-
-# 커스텀 포트
-python -m open_proxy_mcp --sse 8080
-```
-
-### 환경변수 (.env)
+`.env` 파일에 DART API 키 입력 ([opendart.fss.or.kr](https://opendart.fss.or.kr)에서 무료 발급):
 
 ```
-OPENDART_API_KEY=...          # 필수 — DART API 키
-OPENDART_API_KEY_2=...        # 선택 — 보조 키 (속도 제한 시 자동 전환)
-ANTHROPIC_API_KEY=...         # 선택 — LLM fallback (Claude)
-OPENAI_API_KEY=...            # 선택 — LLM fallback (OpenAI)
-UPSTAGE_API_KEY=...           # 선택 — OCR fallback (Upstage Document Parse)
+OPENDART_API_KEY=발급받은_키
 ```
 
-### Claude Code 설정 (.mcp.json)
+### Claude Desktop 연결
+
+`~/Library/Application Support/Claude/claude_desktop_config.json`에 추가:
 
 ```json
 {
   "mcpServers": {
     "open-proxy-mcp": {
-      "command": "python",
+      "command": "/path/to/open-proxy-mcp/.venv/bin/python",
       "args": ["-m", "open_proxy_mcp"],
       "cwd": "/path/to/open-proxy-mcp"
     }
@@ -221,21 +196,31 @@ UPSTAGE_API_KEY=...           # 선택 — OCR fallback (Upstage Document Parse)
 }
 ```
 
-### Claude 웹 연결 (SSE + ngrok)
+Claude Desktop 재시작 후 새 대화에서: **"agm_guide를 먼저 호출해줘"**
 
-```bash
-# 터미널 1: MCP SSE 서버
-python -m open_proxy_mcp --sse
+### Claude Code 연결
 
-# 터미널 2: ngrok 터널
-ngrok http 9000
+프로젝트 루트에 `.mcp.json` 추가:
+
+```json
+{
+  "mcpServers": {
+    "open-proxy-mcp": {
+      "command": "/path/to/open-proxy-mcp/.venv/bin/python",
+      "args": ["-m", "open_proxy_mcp"],
+      "cwd": "/path/to/open-proxy-mcp"
+    }
+  }
+}
 ```
 
-ngrok URL + `/sse`를 Claude 웹 Integrations에서 MCP Server로 등록.
+### 선택 API 키 (.env)
 
-### 첫 사용 시
-
-AI에게: "먼저 `agm_guide`를 호출해서 사용법을 읽어줘"
+```
+OPENDART_API_KEY=...          # 필수 - opendart.fss.or.kr에서 무료 발급
+OPENDART_API_KEY_2=...        # 선택 - 보조 키 (속도 제한 시 자동 전환)
+UPSTAGE_API_KEY=...           # 선택 - OCR fallback (Upstage Document Parse)
+```
 
 ## 라이선스
 
