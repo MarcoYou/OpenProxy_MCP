@@ -88,31 +88,32 @@ def parse_compensation_pdf(md_text: str) -> dict:
     lines = md_text.split('\n')
     items = []
 
-    # 보수한도 본문 섹션 찾기: "가. 이사의 수" 패턴이 가장 정확
-    # 목차나 정정사항이 아닌 본문의 실제 테이블 영역만 잡기
+    # 보수한도 본문 섹션 찾기
+    # 전략 1: "가. 이사의 수" 패턴
+    # 전략 2: 테이블에서 "보수총액 또는 최고한도액" 직접 찾기
+    # 둘 다 시도하고, 실제 테이블 데이터가 있는 위치만 사용
     comp_starts = []
+
+    # 전략 2를 기본으로 (더 직접적): 보수총액 테이블 위치 기반
+    seen_positions = set()
     for i, line in enumerate(lines):
-        line_clean = line.strip()
-        # "가. 이사의 수ㆍ보수총액" 패턴 (본문 시작점)
-        if re.search(r'가\.\s*(?:이사|감사)의?\s*수', line_clean):
-            comp_starts.append(i)
+        if '보수총액또는최고한도액' in line.replace(' ', '') and '|' in line:
+            if any(abs(i - p) < 20 for p in seen_positions):
+                continue
+            seen_positions.add(i)
+            # 위로 올라가서 "이사의 수" 행 찾기 (같은 테이블의 시작)
+            for j in range(max(0, i-5), i):
+                if '이사의 수' in lines[j].replace(' ','') or '감사의 수' in lines[j].replace(' ',''):
+                    comp_starts.append(j)
+                    break
+            else:
+                comp_starts.append(max(0, i-3))
 
     if not comp_starts:
-        # fallback: 테이블에서 "보수총액 또는 최고한도액" 행을 직접 찾기
-        seen_positions = set()
+        # 전략 1 fallback: "가. 이사의 수" 패턴
         for i, line in enumerate(lines):
-            if '보수총액또는최고한도액' in line.replace(' ', '') and '|' in line:
-                # 중복 방지 (같은 테이블 근처에 있으면 스킵)
-                if any(abs(i - p) < 20 for p in seen_positions):
-                    continue
-                seen_positions.add(i)
-                # 위로 올라가서 당기/전기 텍스트 찾기
-                for j in range(max(0, i-8), i):
-                    if re.search(r'당\s*기|당기|\d{4}\s*년', lines[j]):
-                        comp_starts.append(j)
-                        break
-                else:
-                    comp_starts.append(max(0, i-3))
+            if re.search(r'가\.\s*(?:이사|감사)의?\s*수', line.strip()):
+                comp_starts.append(i)
 
     if not comp_starts:
         return {"items": [], "summary": _empty_compensation_summary()}
@@ -341,14 +342,21 @@ def parse_personnel_pdf(md_text: str) -> dict:
     while i < len(lines):
         line = lines[i]
         # 경력 테이블 헤더: |후보자성명|주된직업|기간|내용|
-        if '후보자성명' in line and '주된직업' in line and '기간' in line and '|' in line:
-            # 다음 행부터 데���터 행
-            i += 1
-            candidates = _parse_career_table(lines, i)
-            if candidates:
-                career_tables.append(candidates)
-                i += len(candidates) * 3  # 대략적 스킵
-                continue
+        if '후보자성명' in line and '주된직업' in line and '|' in line:
+            # 이 테이블에 '기간' 컬럼이 있는지 (경력 테이블만 파싱)
+            has_period = '기간' in line
+            if not has_period and i + 2 < len(lines):
+                has_period = '기간' in lines[i+1] or '기간' in lines[i+2]
+
+            if has_period:
+                parse_start = i + 1
+                if i + 2 < len(lines) and '기간' in lines[i+1]:
+                    parse_start = i + 2
+                candidates = _parse_career_table(lines, parse_start)
+                if candidates:
+                    career_tables.append(candidates)
+                    i = parse_start + len(candidates) * 3
+                    continue
         i += 1
 
     # 3. 안건-후보자 매핑
@@ -461,11 +469,22 @@ def _parse_career_table(lines: list[str], start: int) -> list[dict]:
             i += 1
             continue
 
-        if not line.endswith('|'):
+        # |로 시작하지만 끝나지 않는 행 → 멀티라인 합치기
+        full_line = line
+        while not full_line.rstrip().endswith('|') and i + 1 < len(lines):
+            i += 1
+            next_l = lines[i].strip()
+            if next_l.startswith('|') and '---' in next_l:
+                break
+            if not next_l:
+                break
+            full_line += '\n' + next_l
+
+        if not full_line.rstrip().endswith('|'):
             i += 1
             continue
 
-        cells = [c.strip() for c in line[1:-1].split('|')]
+        cells = [c.strip() for c in full_line[1:-1].split('|')]
         if len(cells) < 4:
             i += 1
             continue
@@ -681,9 +700,13 @@ def _parse_financial_table(lines: list[str], start: int) -> tuple[list[list[str]
         line = lines[i].strip()
 
         if not line:
-            if rows:  # 테이블 중이면 빈 줄에서 종료
-                i += 1
-                break
+            if rows:
+                # 빈 줄 뒤에 |로 시작하는 행이 있으면 테이블 계속 (멀티 테이블 구조)
+                lookahead = min(len(lines), i + 3)
+                has_more = any(lines[j].strip().startswith('|') for j in range(i+1, lookahead))
+                if not has_more:
+                    i += 1
+                    break
             i += 1
             continue
 
@@ -894,37 +917,45 @@ def parse_agenda_pdf(md_text: str) -> list[dict]:
     items = []
     seen_numbers = set()
 
-    # 소집공고 본문 영역 찾기
-    # 정정공고는 "정 정 신 고" → "주주총회소집공고" 순서
-    # 본문의 소집공고 시작점을 찾아야 함 (목차 아님)
-    notice_start = 0
+    # 회의목적사항 영역 정확히 찾기
+    # "N. 회의목적사항" 또는 "회의 목적사항" 패턴 (N은 보통 3 또는 4)
+    # 정정공고 테이블/목차 안의 "목적사항" 텍스트는 제외해야 함
+    agenda_start = -1
     for i, line in enumerate(lines):
-        line_nospace = line.replace(' ', '')
-        # "# 주주총회소집공고" 또는 "주 주 총 회 소 집 공 고" (헤딩)
-        if re.match(r'^#+\s*주주총회소집공고', line_nospace) or \
-           re.match(r'^#+\s*주\s*주\s*총\s*회', line):
-            notice_start = i
-            # 더 아래에 또 있으면 (정정 preamble 다음의 본문) 그걸로 업데이트
-            continue
-
-    # 회의목적사항 영역 찾기 — notice_start 이후
-    agenda_start = notice_start
-    for i in range(notice_start, min(len(lines), notice_start + 300)):
-        if re.search(r'회의.*목적|목적사항|결의사항|부의안건', lines[i]):
+        line_strip = line.strip()
+        # "4. 회의목적사항" 또는 "3. 회의 목적사항" (본문 시작)
+        if re.match(r'^-?\s*[34]\.\s*회의\s*목적\s*사항', line_strip):
+            agenda_start = i
+            break
+        # "회의의 목적사항" (일부 기업)
+        if re.match(r'^-?\s*[34]\.\s*회의의?\s*목적', line_strip):
             agenda_start = i
             break
 
-    # 안건 번호 패턴으로 추출
-    # "- ○ 제1호 의안: 정관 일부 변경의 건" 형태
+    if agenda_start < 0:
+        # fallback: "주주총회 소집공고" 헤딩 이후에서 찾기
+        notice_start = 0
+        for i, line in enumerate(lines):
+            line_nospace = line.replace(' ', '')
+            if re.match(r'^#+\s*주주총회\s*소집\s*공고', line_nospace):
+                notice_start = i
+        for i in range(notice_start, min(len(lines), notice_start + 300)):
+            if re.search(r'회의.*목적|목적사항|결의사항|부의안건', lines[i]):
+                agenda_start = i
+                break
+        if agenda_start < 0:
+            agenda_start = notice_start
+
+    # 안건 번호 패턴
     agenda_pattern = re.compile(
-        r'(?:□|○|◆|▶|\-\s*○?\s*)?'     # 앞 장식 (- ○ 포함)
+        r'(?:□|○|◆|▶|\-\s*○?\s*)?'     # 앞 장식
         r'제\s*(\d+(?:-\d+)*)\s*호'      # 안건 번호
         r'\s*(?:의안)?[)）:\s]*'          # 구분자
         r'(.+)'                           # 제목
     )
 
-    # 검색 범위: 목적사항 이후 300줄 (정정공고 포함 대형 문서 대응)
-    for i in range(agenda_start, min(len(lines), agenda_start + 300)):
+    # 검색 범위: 목적사항부터 100줄 (안건 목록은 보통 한 페이지)
+    for i in range(agenda_start, min(len(lines), agenda_start + 100)):
         line = lines[i].strip()
         line = re.sub(r'^[-\s*□○◆▶]+', '', line)
 
@@ -939,7 +970,7 @@ def parse_agenda_pdf(md_text: str) -> list[dict]:
         title = re.sub(r'\s*\|.*$', '', title)       # | 이후 제거
         title = title.strip()
 
-        if not title or len(title) > 200:
+        if not title or len(title) < 2 or len(title) > 200:
             continue
 
         full_number = f"제{number_str}호"
