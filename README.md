@@ -138,7 +138,7 @@ AI가 agm_personnel_xml(rcept_no) 호출
 |------|-----|-----|-----|
 | agenda | 99.5% | 98.0% | 100% |
 | financials BS | 97.4% | 97.9% | 100% |
-| financials IS | - | 95.7% | 100% |
+| financials IS | 100% | 95.7% | 100% |
 | personnel | 98.9% | 97.9% | 100% |
 | aoi (정관변경) | 97.8% | 99.0% | 100% |
 | compensation | 98.4% | 99.5% | 100% |
