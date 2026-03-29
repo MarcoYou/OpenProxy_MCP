@@ -2862,8 +2862,8 @@ def _empty_compensation_summary() -> dict:
 
 # ── 자기주식 파싱 ──
 
-_TREASURY_KEYWORDS = ['자기주식', '자사주']
-_TREASURY_CANCEL_KW = ['소각', '자본금 감소', '자본감소']
+_TREASURY_KEYWORDS = ['자기주식', '자사주', '자본의 감소', '자본금 감소']
+_TREASURY_CANCEL_KW = ['소각', '자본금 감소', '자본감소', '자본의 감소']
 
 
 def parse_treasury_xml(html: str) -> dict:
@@ -2881,8 +2881,17 @@ def parse_treasury_xml(html: str) -> dict:
 
     for d in details:
         title = d.get("title", "")
-        if not any(kw in title for kw in _TREASURY_KEYWORDS):
-            continue
+        # 제목 매칭 또는 본문에 자기주식 키워드
+        title_match = any(kw in title for kw in _TREASURY_KEYWORDS)
+        if not title_match:
+            # "기타 주주총회의 목적사항" 안에 자기주식 내용이 있는지
+            body_text = ' '.join(
+                block.get('content', '')
+                for sec in d.get('sections', [])
+                for block in sec.get('blocks', [])
+            )
+            if not any(kw in body_text for kw in ['자기주식', '자사주']):
+                continue
 
         # 유형 분류
         item_type = "cancel" if any(kw in title for kw in _TREASURY_CANCEL_KW) else "hold_dispose"
@@ -2958,11 +2967,17 @@ def parse_capital_reserve_xml(html: str) -> dict:
 
     for d in details:
         title = d.get("title", "")
-        if "자본준비금" not in title and "이익잉여금" not in title:
-            continue
-        # 재무제표 안건은 제외
-        if any(kw in title for kw in ["재무제표", "재무상태표", "대차대조표"]):
-            continue
+        title_match = "자본준비금" in title and not any(kw in title for kw in ["재무제표", "재무상태표", "대차대조표"])
+        if not title_match:
+            body_text = ' '.join(
+                block.get('content', '')
+                for sec in d.get('sections', [])
+                for block in sec.get('blocks', [])
+            )
+            if '자본준비금' not in body_text:
+                continue
+            if any(kw in title for kw in ["재무제표", "재무상태표", "대차대조표"]):
+                continue
 
         amount = None
         purpose = ""
@@ -3013,8 +3028,16 @@ def parse_retirement_xml(html: str) -> dict:
 
     for d in details:
         title = d.get("title", "")
-        if "퇴직금" not in title and "퇴직위로금" not in title:
-            continue
+        title_match = "퇴직금" in title or "퇴직위로금" in title
+        if not title_match:
+            # "기타 주주총회의 목적사항" 안에 퇴직금 내용이 있는지
+            body_text = ' '.join(
+                block.get('content', '')
+                for sec in d.get('sections', [])
+                for block in sec.get('blocks', [])
+            )
+            if '퇴직금' not in body_text and '퇴직위로금' not in body_text:
+                continue
 
         for sec in d.get("sections", []):
             for block in sec.get("blocks", []):
@@ -3034,9 +3057,9 @@ def parse_retirement_xml(html: str) -> dict:
                 reason_idx = -1
 
                 for ci, h in enumerate(headers_clean):
-                    if any(kw in h for kw in ['변경전', '현행', '현행']):
+                    if any(kw in h for kw in ['변경전', '현행']):
                         before_idx = ci
-                    if any(kw in h for kw in ['변경후', '개정안', '개정']):
+                    if any(kw in h for kw in ['변경후', '개정안', '개정', '변경(안)']):
                         after_idx = ci
                     if any(kw in h for kw in ['목적', '비고', '사유']):
                         reason_idx = ci
