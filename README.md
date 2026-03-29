@@ -14,6 +14,34 @@ The rise of passive investing is concentrating ownership in permanent, price-ins
 
 OpenProxy bridges this gap. By transforming unstructured AGM disclosures into AI-ready structured data via MCP, it enables any investor or analyst to make informed, consistent proxy voting decisions at scale — without proprietary infrastructure or advisory dependencies.
 
+## Why Parsing Matters
+
+A raw DART AGM filing is a 100+ page HTML document mixing regulatory boilerplate, financial footnotes, and actual voting items. Finding "how much is the CEO getting paid?" requires reading through thousands of lines.
+
+**Before (raw DART filing):**
+```
+가. 이사의 수ㆍ보수총액 내지 최고 한도액
+당 기(제58기, 2026년)
+이사의 수 (사외이사수) 8(    5    )
+보수총액 또는 최고한도액 450억원
+전 기(제57기, 2025년)
+이사의 수 (사외이사수) 10(    6    )
+실제 지급된 보수총액 287억원
+최고한도액 360억원
+※ 당기(제58기) 보수 한도 총액 450억 : 일반보수 260억 ...
+```
+
+**After (OpenProxy):**
+```json
+{
+  "current": {"headcount": "8(5)", "limit": "450억원", "limitAmount": 45000000000},
+  "prior": {"actualPaid": "287억원", "limit": "360억원"},
+  "priorUtilization": 79.7
+}
+```
+
+One API call. Structured. Ready for analysis.
+
 ## Data Source
 
 - [OpenDART API](https://opendart.fss.or.kr/) — Korea Financial Supervisory Service Electronic Disclosure System
