@@ -28,3 +28,6 @@ test_kospi200*.json
 
 # Document cache (DART API)
 cache/
+test_screenshots/*.key
+test_screenshots/Compare/
+test_screenshots/

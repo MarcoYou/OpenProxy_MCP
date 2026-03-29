@@ -1,6 +1,7 @@
 """OpenProxy MCP 서버 — FastMCP 진입점"""
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 mcp = FastMCP("open-proxy-mcp")
 
