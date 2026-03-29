@@ -2,6 +2,25 @@
 
 ## 2026-03-29
 
+### Upstage OCR fallback
+- opendataloader 실패 시 → 키워드로 페이지 특정 → Upstage OCR → 재파싱
+- 11건 실패 케이스 전부 OCR에서 성공 (100%)
+- `ocr_fallback_for_parser()` 구현 (pdf_parser.py)
+- SK스퀘어 comp: `(단위:억원)` + `100` = 100억원 해결
+- BGF리테일/KCC/LIG넥스원/포스코DX pers: 후보자 경력 전부 추출
+- GS/SK아이이테크놀로지/TKG휴켐스/세아베스틸지주 BS: 테이블 정상 추출
+- SK케미칼/지역난방공사 aoi: 정관변경 조항 추출
+
+### 안건 tree 기반 판정 원칙
+- CASE_DEFINITION 업데이트: 해당 안건 없으면 실패 아님
+- 실제 성공률 재계산: comp 99.5%, pers 97.9%, BS 97.9%, IS 95.7%, aoi 99.0%, agenda 98.0%
+
+### 아키텍처 결정
+- `parse_with_fallback()` 단일 함수로 XML→PDF→OCR 체이닝
+- MCP/Pipeline 모드 분리 불필요 — 항상 최선 결과 반환
+- 로컬 SQLite DB로 캐싱 (rcept_no별 XML/PDF/OCR 결과 + 소스 태깅)
+- 다음 단계: parse_with_fallback 구현 + SQLite 스키마 설계
+
 ### PDF 파서 3회 개선 루프 (pdf_parser.py)
 - 5개 파서 구현: parse_compensation_pdf, parse_personnel_pdf, parse_financials_pdf, parse_aoi_pdf, parse_agenda_pdf
 - 파서 네이밍 _xml/_pdf 구분 리팩토링

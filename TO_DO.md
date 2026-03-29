@@ -19,13 +19,24 @@
 - [ ] 권고적 주주제안 구조 (LG화학 제3호 — 팰리서 등 행동주의 펀드)
 - [ ] 프록시 파이트 분석 연계
 
+### parse_with_fallback 통합
+- [ ] parse_with_fallback() 구현 — XML → validate → PDF → OCR 체이닝
+- [ ] SOFT_FAIL 판정 함수 (파서별 품질 체크)
+- [ ] XML vs PDF 비교 함수 (파서별 better 판정)
+- [ ] shareholder.py tool에서 parse_with_fallback 호출로 전환
+- [ ] LLM fallback (CASE_DEFINITION 예시 기반, 향후)
+
+### 로컬 DB (SQLite 캐싱)
+- [ ] 스키마 설계 (rcept_no별 XML/PDF/OCR 결과 + 소스 태깅)
+- [ ] 기존 파일 캐시(cache/pdf, cache/pdf_parsed) → DB 마이그레이션
+- [ ] _doc_cache (LRU 30건) → DB 전환
+
 ### PDF 파싱 보조 소스
 - [x] ~~opendataloader-pdf 설치 + DART PDF 파싱 품질 테스트~~
-- [x] ~~PDF 파서 5개 구현 (pdf_parser.py) — comp 97.5%, pers 93.9%, BS 96%, IS 93.9%, aoi 97%, agenda 97.5%~~
+- [x] ~~PDF 파서 5개 구현 (pdf_parser.py) — comp 99.5%, pers 97.9%, BS 97.9%, IS 95.7%, aoi 99%, agenda 98%~~
 - [x] ~~198개 전체 PDF 다운로드 + opendataloader 파싱~~
-- [ ] XML 파싱 실패 시 PDF fallback 파이프라인 구현 (shareholder.py에 통합)
-- [ ] LLM fallback에 XML+PDF 동시 전달 구조
-- [ ] PDF 파서 남은 실패 케이스 개선 (agenda 5건, comp 5건 등)
+- [x] ~~Upstage OCR fallback 구현 + 11건 전부 성공 검증~~
+- [x] ~~PDF 파서 남은 실패 → Upstage OCR로 100% 해결 확인~~
 
 ### 이미지 인덱싱 + OCR 파이프라인
 - [ ] parse_agenda_details에서 이미지 메타데이터 인덱싱 (파일명, 위치, 카테고리)

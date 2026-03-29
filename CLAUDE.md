@@ -18,11 +18,12 @@ open_proxy_mcp/       # MCP 서버 (Python)
   server.py           # FastMCP 서버 진입점
   tools/
     shareholder.py    # MCP tool 11개 (agm_*) + 포매터 + format_krw
-    parser.py         # 파서 (bs4+regex) — 안건/재무/인사/정정
+    parser.py         # XML 파서 (bs4+regex) — parse_*_xml()
+    pdf_parser.py     # PDF 파서 (opendataloader md) — parse_*_pdf() + Upstage OCR fallback
   dart/
-    client.py         # OpenDART API 래퍼 (인증, 캐싱, HTML 보존)
+    client.py         # OpenDART API + 웹 PDF 다운로드 (rate limiter 내장)
   llm/
-    client.py         # LLM fallback
+    client.py         # LLM fallback (Claude Sonnet / OpenAI)
 
 OpenProxy/            # 프론트엔드 (React/Vite) — git clone from HojiPark/openproxy
   frontend/
