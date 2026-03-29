@@ -72,7 +72,7 @@ def _clean_br(text: str) -> str:
 
 # ── 보수한도 파서 ──
 
-def parse_compensation_from_pdf(md_text: str) -> dict:
+def parse_compensation_pdf(md_text: str) -> dict:
     """PDF 마크다운에서 보수한도 정보 추출
 
     패턴:
@@ -305,7 +305,7 @@ _CATEGORY_MAP = [
 ]
 
 
-def parse_personnel_from_pdf(md_text: str) -> dict:
+def parse_personnel_pdf(md_text: str) -> dict:
     """PDF 마크다운에서 이사/감사 선임 후보자 정보 추출
 
     패턴:
@@ -543,7 +543,7 @@ def _empty_compensation_summary() -> dict:
 
 # ── 재무제표 파서 ──
 
-def parse_financials_from_pdf(md_text: str) -> dict:
+def parse_financials_pdf(md_text: str) -> dict:
     """PDF 마크다운에서 재무상태표/손익계산서 추출
 
     패턴:
@@ -713,7 +713,7 @@ def _parse_financial_table(lines: list[str], start: int) -> tuple[list[list[str]
 
 # ── 정관변경 파서 ──
 
-def parse_aoi_from_pdf(md_text: str) -> dict:
+def parse_aoi_pdf(md_text: str) -> dict:
     """PDF 마크다운에서 정관변경 비교 테이블 추출
 
     패턴:
@@ -816,7 +816,7 @@ def parse_aoi_from_pdf(md_text: str) -> dict:
 
 # ── 안건 목록 파서 ──
 
-def parse_agenda_from_pdf(md_text: str) -> list[dict]:
+def parse_agenda_pdf(md_text: str) -> list[dict]:
     """PDF 마크다운에서 안건 트리 추출
 
     패턴 (소집공고 본문의 회의목적사항):

@@ -73,14 +73,14 @@ def _format_won(value: int) -> str:
         return f"{sign}{abs_val:,}원"
 from open_proxy_mcp.dart.client import DartClient
 from open_proxy_mcp.tools.parser import (
-    parse_agenda_items, parse_meeting_info,
+    parse_agenda_xml, parse_meeting_info_xml,
     validate_agenda_result, _extract_notice_section, _extract_agenda_zone,
-    parse_agenda_details, validate_agenda_details,
-    parse_financial_statements,
-    parse_correction_details,
-    parse_personnel,
-    parse_aoi,
-    parse_compensation,
+    parse_agenda_details_xml, validate_agenda_details,
+    parse_financials_xml,
+    parse_corrections_xml,
+    parse_personnel_xml,
+    parse_aoi_xml,
+    parse_compensation_xml,
 )
 from open_proxy_mcp.llm.client import extract_agenda_with_llm
 
@@ -481,7 +481,7 @@ def register_tools(mcp):
         doc = await _get_document_cached(rcept_no)
         text = doc["text"]
         html = doc.get("html", "")
-        agenda = parse_agenda_items(text, html=html)
+        agenda = parse_agenda_xml(text, html=html)
         parse_method = "bs4+regex" if html else "regex"
 
         if not validate_agenda_result(agenda) and use_llm:
@@ -505,7 +505,7 @@ def register_tools(mcp):
                 return "안건을 파싱할 수 없습니다. (정규식 + LLM 모두 실패)"
 
         if format == "json":
-            meeting_info = parse_meeting_info(text)
+            meeting_info = parse_meeting_info_xml(text)
             result = _build_agenda_json(rcept_no, agenda, meeting_info, parse_method=parse_method)
             return json.dumps(result, ensure_ascii=False, indent=2)
 
@@ -524,10 +524,10 @@ def register_tools(mcp):
             rcept_no: 접수번호 (예: 20260225000123)
         """
         doc = await _get_document_cached(rcept_no)
-        info = parse_meeting_info(doc["text"], html=doc.get("html", ""))
+        info = parse_meeting_info_xml(doc["text"], html=doc.get("html", ""))
 
         # 정정공고 메타데이터 추가
-        correction = parse_correction_details(doc.get("html", ""))
+        correction = parse_corrections_xml(doc.get("html", ""))
         if correction:
             info["correction_summary"] = {
                 "date": correction.get("date"),
@@ -569,7 +569,7 @@ def register_tools(mcp):
         if not html:
             return "안건 상세를 파싱할 수 없습니다. (HTML 없음)"
 
-        details = parse_agenda_details(html)
+        details = parse_agenda_details_xml(html)
 
         if not validate_agenda_details(details):
             if use_llm:
@@ -628,7 +628,7 @@ def register_tools(mcp):
             return "재무제표를 파싱할 수 없습니다. (HTML 없음)"
 
         # 체이닝: agm_items 로직으로 재무제표 안건 존재 여부 판단
-        details = parse_agenda_details(html)
+        details = parse_agenda_details_xml(html)
         fs_found = False
         if details:
             for d in details:
@@ -639,7 +639,7 @@ def register_tools(mcp):
                     break
 
         # 재무제표 테이블 정규화 (HTML 직접 파싱)
-        result = parse_financial_statements(html)
+        result = parse_financials_xml(html)
 
         # 빈 결과 체크 — 안건 트리에서 이유 파악
         has_data = any(
@@ -649,8 +649,8 @@ def register_tools(mcp):
         )
         if not has_data:
             text = doc["text"]
-            agenda = parse_agenda_items(text, html=html)
-            info = parse_meeting_info(text, html=html)
+            agenda = parse_agenda_xml(text, html=html)
+            info = parse_meeting_info_xml(text, html=html)
 
             # 재무제표 승인 안건 존재 여부
             fs_agenda = [a for a in agenda if any(
@@ -723,7 +723,7 @@ def register_tools(mcp):
         if not html:
             return "정정 사항을 확인할 수 없습니다. (HTML 없음)"
 
-        result = parse_correction_details(html)
+        result = parse_corrections_xml(html)
         if not result:
             return "정정공고가 아닙니다. (정정 사항 없음)"
 
@@ -751,7 +751,7 @@ def register_tools(mcp):
         if not html:
             return "인사 정보를 파싱할 수 없습니다. (HTML 없음)"
 
-        result = parse_personnel(html)
+        result = parse_personnel_xml(html)
 
         if not result.get("appointments"):
             return "선임/해임 안건이 없습니다."
@@ -782,14 +782,14 @@ def register_tools(mcp):
             return "정관변경 사항을 파싱할 수 없습니다. (HTML 없음)"
 
         # 세부의안 목록 확보 (agm_agenda 체이닝)
-        agenda = parse_agenda_items(text, html=html)
+        agenda = parse_agenda_xml(text, html=html)
         charter_subs = []
         for item in agenda:
             if "정관" in item.get("title", ""):
                 charter_subs = item.get("children", [])
                 break
 
-        result = parse_aoi(html, sub_agendas=charter_subs if charter_subs else None)
+        result = parse_aoi_xml(html, sub_agendas=charter_subs if charter_subs else None)
 
         if not result.get("amendments"):
             return "정관변경 안건이 없습니다."
@@ -818,7 +818,7 @@ def register_tools(mcp):
         if not html:
             return "보수한도 정보를 파싱할 수 없습니다. (HTML 없음)"
 
-        result = parse_compensation(html)
+        result = parse_compensation_xml(html)
 
         if not result.get("items"):
             return "보수한도 승인 안건이 없습니다."
@@ -874,13 +874,13 @@ def register_tools(mcp):
         html = doc.get("html", "")
 
         # 1. 회의 정보
-        info = parse_meeting_info(text, html=html)
+        info = parse_meeting_info_xml(text, html=html)
 
         # 2. 안건 트리
-        agenda = parse_agenda_items(text, html=html)
+        agenda = parse_agenda_xml(text, html=html)
 
         # 3. 정정 요약
-        correction = parse_correction_details(html) if html else None
+        correction = parse_corrections_xml(html) if html else None
         if correction:
             info["correction_summary"] = {
                 "date": correction.get("date"),
@@ -892,11 +892,11 @@ def register_tools(mcp):
             }
 
         # 4. 재무 하이라이트
-        fs = parse_financial_statements(html) if html else None
+        fs = parse_financials_xml(html) if html else None
         fs_highlight = _build_financial_highlight(fs) if fs else None
 
         # 5. 인사 하이라이트
-        personnel = parse_personnel(html) if html else None
+        personnel = parse_personnel_xml(html) if html else None
         personnel_summary = personnel.get("summary") if personnel else None
 
         # 포매팅

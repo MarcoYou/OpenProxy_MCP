@@ -48,7 +48,7 @@ async def extract_agenda_with_llm(zone_text: str, provider: str = "claude") -> l
         provider: "claude" (기본) 또는 "openai"
 
     Returns:
-        parse_agenda_items와 동일한 구조의 list[dict]
+        parse_agenda_xml와 동일한 구조의 list[dict]
         실패 시 빈 리스트 반환
     """
     user_msg = USER_PROMPT_TEMPLATE.format(zone_text=zone_text[:3000])
@@ -109,7 +109,7 @@ async def _call_openai(user_msg: str) -> str:
 
 
 def _normalize_llm_output(items: list[dict], level1: int = 1) -> list[dict]:
-    """LLM JSON 출력을 parse_agenda_items 반환 구조로 정규화"""
+    """LLM JSON 출력을 parse_agenda_xml 반환 구조로 정규화"""
     result = []
     for item in items:
         number = item.get("number", "")

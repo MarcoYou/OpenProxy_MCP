@@ -9,12 +9,12 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from open_proxy_mcp.dart.client import DartClient
 from open_proxy_mcp.tools.parser import (
-    parse_agenda_items,
+    parse_agenda_xml,
     validate_agenda_result,
-    parse_meeting_info,
-    parse_financial_statements,
-    parse_personnel,
-    parse_aoi,
+    parse_meeting_info_xml,
+    parse_financials_xml,
+    parse_personnel_xml,
+    parse_aoi_xml,
 )
 
 PIPELINE_DIR = "OpenProxy/frontend/src/data/pipeline"
@@ -506,11 +506,11 @@ async def process_company(client: DartClient, name: str, ticker: str, json_file:
     text = doc["text"]
 
     # 파서 실행
-    parsed_items = parse_agenda_items(text, html)
-    meeting_info = parse_meeting_info(text, html)
-    fin = parse_financial_statements(html)
-    pers = parse_personnel(html)
-    aoi = parse_aoi(html, sub_agendas=[
+    parsed_items = parse_agenda_xml(text, html)
+    meeting_info = parse_meeting_info_xml(text, html)
+    fin = parse_financials_xml(html)
+    pers = parse_personnel_xml(html)
+    aoi = parse_aoi_xml(html, sub_agendas=[
         {"number": item["number"], "title": item["title"]}
         for item in parsed_items
         for child in [item] + item.get("children", [])

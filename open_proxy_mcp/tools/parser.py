@@ -104,7 +104,7 @@ SECTION_END_PATTERNS = [
 
 # ── 안건 파싱 ──
 
-def parse_agenda_items(text: str, html: str = "") -> list[dict]:
+def parse_agenda_xml(text: str, html: str = "") -> list[dict]:
     """'주주총회 소집공고' 섹션의 회의목적사항에서 안건 트리 추출
 
     html이 제공되면 bs4로 섹션 경계를 찾고, 없으면 기존 regex 방식 사용.
@@ -405,7 +405,7 @@ def _build_tree(flat_items: list[dict]) -> list[dict]:
 
 # ── 비안건 파싱 ──
 
-def parse_meeting_info(text: str, html: str = "") -> dict:
+def parse_meeting_info_xml(text: str, html: str = "") -> dict:
     """소집공고에서 비안건 정보를 추출
 
     html이 제공되면 bs4로 소집공고 섹션을 정확히 잡아서 파싱.
@@ -646,7 +646,7 @@ SUBSECTION_RE = re.compile(
 )
 
 
-def parse_agenda_details(html: str) -> list[dict]:
+def parse_agenda_details_xml(html: str) -> list[dict]:
     """HTML에서 '목적사항별 기재사항' 섹션의 안건별 상세를 파싱
 
     DART 문서 XML 구조:
@@ -1261,13 +1261,13 @@ def _clean_career_details(details: list[dict], name: str = "") -> list[dict]:
     return cleaned
 
 
-def parse_personnel(html: str) -> dict:
+def parse_personnel_xml(html: str) -> dict:
     """선임/해임 안건에서 후보자/대상자 정보를 정규화 추출
 
     Returns:
         {"appointments": [...], "summary": {...}}
     """
-    details = parse_agenda_details(html)
+    details = parse_agenda_details_xml(html)
     if not details:
         return {"appointments": [], "summary": _empty_personnel_summary()}
 
@@ -1667,7 +1667,7 @@ def _empty_personnel_summary() -> dict:
 
 # ── 정관변경 파싱 ──
 
-def parse_aoi(html: str, sub_agendas: list[dict] | None = None) -> dict:
+def parse_aoi_xml(html: str, sub_agendas: list[dict] | None = None) -> dict:
     """정관변경 안건에서 세부의안별 변경전/변경후/사유를 구조화 추출
 
     Args:
@@ -1678,7 +1678,7 @@ def parse_aoi(html: str, sub_agendas: list[dict] | None = None) -> dict:
     Returns:
         {"amendments": [...], "summary": {...}}
     """
-    details = parse_agenda_details(html)
+    details = parse_agenda_details_xml(html)
     if not details:
         return {"amendments": [], "summary": _empty_aoi_summary()}
 
@@ -1891,7 +1891,7 @@ def _empty_aoi_summary() -> dict:
 
 # ── 정정공고 파싱 (HTML 기반) ──
 
-def parse_correction_details(html: str) -> dict | None:
+def parse_corrections_xml(html: str) -> dict | None:
     """정정공고의 정정 사항을 파싱
 
     DART 정정공고 구조:
@@ -1984,7 +1984,7 @@ _FS_UNIT = re.compile(r'\(단위\s*[:：]?\s*(.+?)\)')
 _FS_PERIOD = re.compile(r'(제\s*\d+\s*\(?\s*(?:당|전)\s*\)?\s*기|(?:20)?\d{2,4}\s*년)')
 
 
-def parse_financial_statements(html: str) -> dict:
+def parse_financials_xml(html: str) -> dict:
     """HTML에서 재무제표(재무상태표, 손익계산서) 구조화 추출
 
     목적사항별 기재사항 > 재무제표 영역에서:
@@ -2632,7 +2632,7 @@ def _extract_period_labels(header_cells: list[str]) -> dict:
 _COMPENSATION_KEYWORDS = ['보수한도', '보수 한도', '보수의 한도', '보수액한도', '보수액 한도']
 
 
-def parse_compensation(html: str) -> dict:
+def parse_compensation_xml(html: str) -> dict:
     """보수한도 안건에서 당기/전기 보수 정보를 정규화 추출
 
     DART 표준 서식:
@@ -2644,7 +2644,7 @@ def parse_compensation(html: str) -> dict:
         {"items": [...], "summary": {...}}
         각 item: {"number", "title", "target", "current", "prior", "notes"}
     """
-    details = parse_agenda_details(html)
+    details = parse_agenda_details_xml(html)
     if not details:
         return {"items": [], "summary": _empty_compensation_summary()}
 
