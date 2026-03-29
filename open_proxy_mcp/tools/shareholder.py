@@ -531,7 +531,7 @@ def register_tools(mcp):
         return "\n".join(result_lines)
 
     @mcp.tool()
-    async def agm_agenda(
+    async def agm_agenda_xml(
         rcept_no: str,
         use_llm: bool = False,
         max_fallback_length: int = 3000,
@@ -674,7 +674,7 @@ def register_tools(mcp):
         return _format_agenda_details(details)
 
     @mcp.tool()
-    async def agm_financials(
+    async def agm_financials_xml(
         rcept_no: str,
         use_llm: bool = False,
         max_fallback_length: int = 3000,
@@ -803,7 +803,7 @@ def register_tools(mcp):
         return _format_correction_details(result)
 
     @mcp.tool()
-    async def agm_personnel(
+    async def agm_personnel_xml(
         rcept_no: str,
         format: str = "md",
     ) -> str:
@@ -832,7 +832,7 @@ def register_tools(mcp):
         return _format_personnel(result)
 
     @mcp.tool()
-    async def agm_aoi_change(
+    async def agm_aoi_change_xml(
         rcept_no: str,
         format: str = "md",
     ) -> str:
@@ -870,7 +870,7 @@ def register_tools(mcp):
         return _format_aoi_change(result)
 
     @mcp.tool()
-    async def agm_compensation(
+    async def agm_compensation_xml(
         rcept_no: str,
         format: str = "md",
     ) -> str:
@@ -1034,8 +1034,8 @@ def register_tools(mcp):
 ## Tool 구조
 
 기본 tool (XML 파싱, 빠름):
-  agm_search → agm_agenda, agm_info, agm_items
-  agm_financials, agm_personnel, agm_aoi_change, agm_compensation
+  agm_search → agm_agenda_xml, agm_info, agm_items
+  agm_financials_xml, agm_personnel_xml, agm_aoi_change_xml, agm_compensation_xml
   agm_steward (종합 오케스트레이터)
 
 PDF fallback tool (XML 실패 시, 느림 4초+):
@@ -1048,7 +1048,7 @@ OCR fallback tool (PDF도 실패 시, 가장 느림, UPSTAGE_API_KEY 필요):
 
 ## Fallback 흐름
 
-1. 기본 tool 호출 (예: agm_personnel)
+1. 기본 tool 호출 (예: agm_personnel_xml)
 2. 결과 확인:
    - 정상이면 → 사용자에게 답변
    - 비어있거나 품질 이슈 → 사용자에게 "XML 파싱이 불완전합니다. PDF로 재시도할까요?" 안내

@@ -19,22 +19,22 @@ agm_steward(ticker)  ← 오케스트레이터 (한 번에 요약)
 │
 ├─ agm_search(ticker)        소집공고 검색 + 정정 태깅
 ├─ agm_info(rcept_no)        회의 정보 + 정정 요약
-├─ agm_agenda(rcept_no)      안건 제목 트리 (세부의안 포함)
+├─ agm_agenda_xml(rcept_no)  안건 제목 트리 (세부의안 포함)
 ├─ agm_corrections(rcept_no) 정정 전/후 비교
 │
 ├─ agm_items(rcept_no)       안건 본문 블록 (범용 raw)
-│   ├─ agm_financials        재무제표 정규화 (BS/IS/자본변동표/처분계산서)
-│   ├─ agm_personnel         이사/감사 선임·해임 정규화
-│   ├─ agm_aoi_change        정관변경 정규화 (변경전/변경후 비교)
-│   └─ agm_compensation      보수한도 정규화 (당기 한도/전기 실지급)
+│   ├─ agm_financials_xml    재무제표 정규화 (BS/IS/자본변동표/처분계산서)
+│   ├─ agm_personnel_xml     이사/감사 선임·해임 정규화
+│   ├─ agm_aoi_change_xml    정관변경 정규화 (변경전/변경후 비교)
+│   └─ agm_compensation_xml  보수한도 정규화 (당기 한도/전기 실지급)
 │
 └─ agm_document(rcept_no)    원문 텍스트
 
 안건 유형별 tool 매핑:
-  재무제표 승인 → agm_financials (테이블 정규화)
-  이사/감사 선임·해임 → agm_personnel (후보자 정보)
-  정관변경 → agm_aoi_change (변경전/변경후 비교)
-  보수한도 승인 → agm_compensation (당기/전기 보수 비교)
+  재무제표 승인 → agm_financials_xml (테이블 정규화)
+  이사/감사 선임·해임 → agm_personnel_xml (후보자 정보)
+  정관변경 → agm_aoi_change_xml (변경전/변경후 비교)
+  보수한도 승인 → agm_compensation_xml (당기/전기 보수 비교)
   자사주/기타 → agm_items (raw 블록)
 ```
 
@@ -42,14 +42,14 @@ agm_steward(ticker)  ← 오케스트레이터 (한 번에 요약)
 |------|------|-------------|
 | `agm_search` | 종목코드/회사명으로 소집공고 검색 | ticker, bgn_de, end_de |
 | `agm_document` | 소집공고 본문 텍스트 반환 | rcept_no, max_length |
-| `agm_agenda` | 안건 트리 파싱 (세부의안 포함) | rcept_no, use_llm, format |
+| `agm_agenda_xml` | 안건 트리 파싱 (세부의안 포함) | rcept_no, use_llm, format |
 | `agm_info` | 회의 정보 (일시/장소/보고사항/전자투표) | rcept_no |
 | `agm_items` | 안건별 상세 내용 (테이블+텍스트) | rcept_no, agenda_no, use_llm, format |
-| `agm_financials` | 재무제표 정규화 (BS/IS/자본변동표/처분계산서) | rcept_no, use_llm, format |
+| `agm_financials_xml` | 재무제표 정규화 (BS/IS/자본변동표/처분계산서) | rcept_no, use_llm, format |
 | `agm_corrections` | 정정 전/후 비교 + 사유 | rcept_no, format |
-| `agm_personnel` | 이사/감사 선임·해임 후보자 정보 | rcept_no, format |
-| `agm_aoi_change` | 정관변경 변경전/변경후 비교 | rcept_no, format |
-| `agm_compensation` | 보수한도 당기/전기 비교 | rcept_no, format |
+| `agm_personnel_xml` | 이사/감사 선임·해임 후보자 정보 | rcept_no, format |
+| `agm_aoi_change_xml` | 정관변경 변경전/변경후 비교 | rcept_no, format |
+| `agm_compensation_xml` | 보수한도 당기/전기 비교 | rcept_no, format |
 | `agm_steward` | 종합 오케스트레이터 (위 tool 자동 조합) | ticker, bgn_de, end_de |
 | `agm_guide` | AI 어시스턴트용 사용 가이드 (flow + 판정 기준) | - |
 
