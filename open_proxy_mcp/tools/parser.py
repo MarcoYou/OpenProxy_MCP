@@ -3083,3 +3083,195 @@ def parse_retirement_pay_xml(html: str) -> dict:
                     })
 
     return {"amendments": amendments, "summary": {"totalAmendments": len(amendments)}}
+
+
+# ── 범용 구조 추출기 (Generic Structural Extractor) ──
+
+def extract_structural_elements(html: str, agenda_no: str = "") -> dict:
+    """안건 유형 상관없이 공통 구조 요소를 기계적으로 추출
+
+    모든 안건에 적용 가능. 파서가 없는 안건의 핵심 데이터 포인트 추출.
+
+    Args:
+        html: 문서 HTML
+        agenda_no: 특정 안건 번호 (빈 문자열이면 전체)
+
+    Returns:
+        {"tables": [...], "amounts": [...], "dates": [...],
+         "names": [...], "legalRefs": [...], "percentages": [...]}
+    """
+    details = parse_agenda_details_xml(html)
+    if not details:
+        return _empty_extracted()
+
+    target_details = details
+    if agenda_no:
+        target_details = [d for d in details if d.get("number", "") == agenda_no]
+        if not target_details:
+            target_details = details
+
+    tables = []
+    amounts = []
+    dates = []
+    names = []
+    legal_refs = []
+    percentages = []
+
+    for d in target_details:
+        for sec in d.get("sections", []):
+            for block in sec.get("blocks", []):
+                content = block.get("content", "")
+                btype = block["type"]
+
+                if btype == "table":
+                    rows = _parse_md_table(content)
+                    if rows and len(rows) >= 2:
+                        tables.append({
+                            "headers": rows[0],
+                            "rows": rows[1:],
+                        })
+
+                # 금액 패턴
+                for m in re.finditer(r'[\d,]+\.?\d*\s*(?:조|억|백만|천)?\s*원', content):
+                    val = m.group(0).strip()
+                    if val not in amounts:
+                        amounts.append(val)
+
+                # 날짜 패턴
+                for m in re.finditer(r'\d{4}\s*[년.]\s*\d{1,2}\s*[월.]\s*\d{1,2}\s*일?', content):
+                    val = m.group(0).strip()
+                    if val not in dates:
+                        dates.append(val)
+                for m in re.finditer(r'\d{4}\.\d{1,2}\.\d{1,2}', content):
+                    val = m.group(0).strip()
+                    if val not in dates:
+                        dates.append(val)
+
+                # 인명 패턴 — 직위 바로 앞뒤의 2-4자 한글만
+                # 일반 명사 제외 (의결권, 주주총회 등에서 오감지 방지)
+                _NAME_EXCLUDE = {'주주총회', '이사회', '감사위원회', '대표이사', '사외이사',
+                    '사내이사', '선임', '해임', '재무제표', '별도', '연결', '총수의', '명칭',
+                    '회사의', '총회에서', '항의', '무제표는', '일자', '이상의', '최초로', '후보의'}
+                for m in re.finditer(r'(?:대표이사|사장|부사장|전무|상무)\s+([가-힣]{2,4})\b', content):
+                    val = m.group(1)
+                    if val not in names and val not in _NAME_EXCLUDE and len(val) <= 4:
+                        names.append(val)
+                for m in re.finditer(r'([가-힣]{2,4})\s+(?:대표이사|사장|부사장|전무|상무)\b', content):
+                    val = m.group(1)
+                    if val not in names and val not in _NAME_EXCLUDE and len(val) <= 4:
+                        names.append(val)
+                for m in re.finditer(r'(?:후보자?|후보)\s*[：:)]\s*([가-힣]{2,4})', content):
+                    val = m.group(1)
+                    if val not in names and val not in _NAME_EXCLUDE:
+                        names.append(val)
+
+                # 법령 참조
+                for m in re.finditer(r'(?:상법|자본시장법|금융회사의 지배구조에 관한 법률|공정거래법)\s*제?\s*\d+조(?:의\d+)?', content):
+                    val = m.group(0).strip()
+                    if val not in legal_refs:
+                        legal_refs.append(val)
+
+                # 비율
+                for m in re.finditer(r'[\d.]+\s*%', content):
+                    val = m.group(0).strip()
+                    if val not in percentages:
+                        percentages.append(val)
+
+    return {
+        "tables": tables[:10],
+        "amounts": amounts[:20],
+        "dates": dates[:10],
+        "names": names[:20],
+        "legalRefs": legal_refs[:10],
+        "percentages": percentages[:10],
+    }
+
+
+def get_agenda_contents(html: str, agenda_no: str = "") -> dict:
+    """안건의 rawContents(HTML) + mdContents(마크다운) 추출
+
+    Args:
+        html: 문서 전체 HTML
+        agenda_no: 특정 안건 번호 (빈 문자열이면 전체)
+
+    Returns:
+        {"rawContents": "<html>...", "mdContents": "## 제1호..."}
+    """
+    details = parse_agenda_details_xml(html)
+    if not details:
+        return {"rawContents": "", "mdContents": ""}
+
+    target_details = details
+    if agenda_no:
+        target_details = [d for d in details if d.get("number", "") == agenda_no]
+
+    # mdContents: sections/blocks를 마크다운으로 변환
+    md_lines = []
+    for d in target_details:
+        title = d.get("title", "")
+        number = d.get("number", "")
+        if number:
+            md_lines.append(f"## {number}: {title}")
+        else:
+            md_lines.append(f"## {title}")
+        md_lines.append("")
+
+        for sec in d.get("sections", []):
+            heading = sec.get("heading", "")
+            if heading:
+                md_lines.append(f"### {heading}")
+                md_lines.append("")
+
+            for block in sec.get("blocks", []):
+                btype = block["type"]
+                content = block["content"]
+                if btype == "table":
+                    md_lines.append(content)
+                    md_lines.append("")
+                elif btype == "note":
+                    md_lines.append(f"> {content}")
+                    md_lines.append("")
+                else:
+                    md_lines.append(content)
+                    md_lines.append("")
+
+    md_contents = "\n".join(md_lines)
+
+    # rawContents: 해당 안건의 HTML 영역 추출
+    # 간소화: 전체 HTML에서 해당 안건 제목 주변을 잡기엔 복잡하므로
+    # mdContents 기반으로 역매핑은 어려움 → 전체 HTML 중 해당 구간 표시
+    raw_contents = ""
+    if target_details:
+        # 첫 안건 제목으로 HTML에서 위치 찾기
+        first_title = target_details[0].get("title", "")
+        if first_title:
+            soup = BeautifulSoup(html, _BS4_PARSER)
+            for el in soup.find_all(string=re.compile(re.escape(first_title[:20]))):
+                # 부모 section 찾기
+                parent = el.parent
+                for _ in range(5):
+                    if parent and parent.name and 'section' in (parent.get('class', []) or [str(parent.name)]):
+                        raw_contents = str(parent)
+                        break
+                    if parent:
+                        parent = parent.parent
+                if raw_contents:
+                    break
+            if not raw_contents:
+                raw_contents = html[:500] + "..."  # fallback
+
+    return {
+        "rawContents": raw_contents,
+        "mdContents": md_contents,
+    }
+
+
+def _empty_extracted() -> dict:
+    return {
+        "tables": [],
+        "amounts": [],
+        "dates": [],
+        "names": [],
+        "legalRefs": [],
+        "percentages": [],
+    }
