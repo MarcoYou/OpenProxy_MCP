@@ -1,5 +1,17 @@
 # Dev Log
 
+## 2026-03-30
+
+### _xml 파서 docstring 품질 기준 구체화
+- 8개 _xml 파서 docstring을 1줄 압축에서 멀티라인 구조로 확장
+- financials: "BS 5행+, IS 3행+" → BS 자산/부채/자본 구조 + IS 필수항목 7개 명시
+- personnel: 이름 2-5자(영문 병기), 경력 각 100자 이내 기준 명시
+- aoi_change: ---생략/삭제가 정상임을 명시
+- compensation: headcount, 소진율 자동 계산 안내 추가
+- fallback 체인 끝에 "AI가 원문 기반 재구성" 단계 추가 (OCR 이후 LLM)
+- "agm_agenda_xml 결과에 [안건유형] 없으면 빈 결과는 정상" 구체화
+- 32개 tool docstring 전면 업데이트 완료 (_xml 8개 + _pdf 8개 + _ocr 8개 + 유틸 8개)
+
 ## 2026-03-29
 
 ### filing_tracker.json — 소집공고 이력 트래킹
