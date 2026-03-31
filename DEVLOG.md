@@ -2,6 +2,34 @@
 
 ## 2026-03-31
 
+### own_* 지분 구조 tool 7개 개발
+- own: 오케스트레이터 (최대주주+특관인 합계, 주식총수, 자사주 비율, 소액주주, 5% 대량보유)
+- own_major: 최대주주+특관인+변동이력
+- own_total: 주식총수+자사주+유통주식+소액주주
+- own_treasury: 자사주 기말 보유 (사보 baseline)
+- own_treasury_tx: 취득결정/처분결정/신탁체결/해지 (DS005 4개 API)
+- own_block: 5% 대량보유 + DART 원문 PUR_OWN 태그로 보유목적 파싱 (단순투자/일반투자/경영참여)
+- own_latest: 전 주주 최신 스냅샷+변동 집계
+- client.py: DART ownership API 11개 + KIND 크롤링 (1-3초 랜덤 간격) 추가
+- KOSPI 200 전수조사: **199/199 전부 OK** (205초, FAIL 0, SKIP 0)
+- 총 39개 tool (기존 32 + own 7)
+
+### DART 지분 API 조사 (삼성전자/KB금융/KT&G)
+- DS002 (정기보고서): hyslrSttus, hyslrChgSttus, mrhlSttus, tesstkAcqsDspsSttus, stockTotqySttus
+- DS004 (수시보고): majorstock (5% 대량보유), elestock (임원소유)
+- DS005 (주요사항): tsstkAqDecsn, tsstkDpDecsn, tsstkAqTrctrCnsDecsn, tsstkAqTrctrCcDecsn
+- majorstock API에 보유목적 필드 없음 → DART document.xml의 PUR_OWN 태그로 해결
+- DART rcept_no ≠ KIND acptno (같은 보고서라도 번호 다를 수 있음)
+
+### KT&G 집중투표 사례 분석
+- 최대주주 IBK 8.06%(단독), 특관인 합계 16.12%
+- 국민연금 7.50%(최대주주보다 높음), GIC 5.03%, BlackRock 5.01%
+- 자사주 12.03% (의결권 없음), 소각 적극 진행 중 (2024-2025 1조원+)
+- 재단/기금/우리사주/임원진 지분으로 경영권 방어하는 구조
+
+### agm_steward → agm 리네임
+- 오케스트레이터 tool명 간소화
+
 ### _pdf/_ocr docstring 보강
 - _pdf 8개: "정상 기준은 _xml과 동일" 참조 문구 추가
 - _ocr 8개: "UPSTAGE_API_KEY가 .env에 없으면 에러" 명시
