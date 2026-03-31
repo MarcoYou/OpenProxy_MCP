@@ -423,7 +423,7 @@ def register_tools(mcp):
 
         Args:
             ticker: 종목코드 또는 회사명
-            year: 사업연도 (미입력 시 전년도. 예: 2026년 조회 시 2025 사업보고서)
+            year: 사업연도 (미입력 시 전년도)
             format: "md" (기본) 또는 "json"
         """
         client = DartClient()
@@ -462,7 +462,7 @@ def register_tools(mcp):
 
         Args:
             ticker: 종목코드 또는 회사명
-            year: 사업연도 (미입력 시 전년도. 예: 2026년 조회 시 2025 사업보고서)
+            year: 사업연도 (미입력 시 전년도)
             format: "md" (기본) 또는 "json"
         """
         client = DartClient()
@@ -501,7 +501,7 @@ def register_tools(mcp):
 
         Args:
             ticker: 종목코드 또는 회사명
-            year: 사업연도 (미입력 시 전년도. 예: 2026년 조회 시 2025 사업보고서)
+            year: 사업연도 (미입력 시 전년도)
             format: "md" (기본) 또는 "json"
         """
         client = DartClient()
@@ -657,13 +657,13 @@ def register_tools(mcp):
         format: str = "md",
     ) -> str:
         """전 주주 최신 스냅샷 + 변동 집계.
-        최대주주(사보 기준) + 5% 대량보유(수시) + 임원소유(수시)를 합쳐서
-        주체별 최신 보유량과 지분율 반환. API 3회 사용.
+        사업보고서 기준 최대주주 + 5% 대량보유(수시) + 임원소유(수시)를 합쳐서
+        사업보고서 이후 어떻게 달라졌는지 주체별로 반환. API 3회 사용.
         임원소유 데이터는 대형주의 경우 수천 건일 수 있음 (최근 5건만 표시).
 
         Args:
             ticker: 종목코드 또는 회사명
-            year: 사업연도 (미입력 시 전년도. 예: 2026년 조회 시 2025 사업보고서)
+            year: 사업연도 (미입력 시 전년도)
             format: "md" (기본) 또는 "json"
         """
         client = DartClient()
@@ -703,8 +703,8 @@ def register_tools(mcp):
         format: str = "md",
     ) -> str:
         """지분 구조 종합 오케스트레이터.
-        종목코드만으로 최대주주(+특관인 합계), 주식총수, 자사주(비율 포함),
-        소액주주, 5% 대량보유(원문 보유목적 파싱)를 한 번에 반환.
+        사업보고서 기준 지분 구조(최대주주, 주식총수, 자사주, 소액주주)를 baseline으로,
+        5% 대량보유(수시 공시)로 최신 변동을 반영하여 한 번에 반환.
         상세 분석은 개별 own_* tool 사용. API 6회 + 보고자 수만큼 원문 다운로드.
 
         Args:
