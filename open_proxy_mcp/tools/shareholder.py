@@ -1758,6 +1758,13 @@ def _parse_agm_result_table(soup) -> list[dict]:
             if not cells[0] or cells[0] == "-":
                 continue
 
+            try:
+                iss = float(cells[4]) if len(cells) > 4 and cells[4] else 0
+                vot = float(cells[5]) if len(cells) > 5 and cells[5] else 0
+                attend = round(iss / vot * 100, 1) if vot > 0 else None
+            except (ValueError, ZeroDivisionError):
+                attend = None
+
             item = {
                 "number": cells[0],
                 "resolution_type": cells[1] if len(cells) > 1 else "",
@@ -1766,6 +1773,7 @@ def _parse_agm_result_table(soup) -> list[dict]:
                 "approval_rate_issued": cells[4] if len(cells) > 4 else "",
                 "approval_rate_voted": cells[5] if len(cells) > 5 else "",
                 "opposition_rate": cells[6] if len(cells) > 6 else "",
+                "estimated_attendance": attend,
             }
             items.append(item)
 
@@ -1785,18 +1793,31 @@ def _format_agm_result(data: dict) -> str:
         lines.append("투표 결과 없음")
         return "\n".join(lines)
 
-    lines.append("| 번호 | 결의구분 | 안건 | 결과 | 찬성(발행기준) | 찬성(행사기준) | 반대/기권 |")
-    lines.append("|------|---------|------|------|-------------|-------------|----------|")
+    # 추정 참석률 — 보통결의 안건 중 최빈값
+    from collections import Counter
+    ordinary_att = []
+    for item in items:
+        if "보통" in item.get("resolution_type", "") and item.get("estimated_attendance"):
+            ordinary_att.append(item["estimated_attendance"])
+    if ordinary_att:
+        most_common = Counter(ordinary_att).most_common(1)[0]
+        lines.append(f"**추정 참석률**: {most_common[0]}% (보통결의 {most_common[1]}건 기준, 발행기준/행사기준 역산)")
+        lines.append(f"*최대주주 제외 참석률은 own_major 지분율과 조합하여 추정 가능*\n")
+
+    lines.append("| 번호 | 결의구분 | 안건 | 결과 | 찬성(발행기준) | 찬성(행사기준) | 반대/기권 | 추정참석률 |")
+    lines.append("|------|---------|------|------|-------------|-------------|----------|----------|")
 
     for item in items:
         passed = item.get("passed", "")
-        # 가결/부결 강조
         if "가결" in passed:
             passed_fmt = f"**{passed}**"
         elif "부결" in passed:
             passed_fmt = f"~~{passed}~~"
         else:
             passed_fmt = passed
+
+        att = item.get("estimated_attendance")
+        att_str = f"{att}%" if att else "-"
 
         lines.append(
             f"| {item.get('number', '')} "
@@ -1805,7 +1826,8 @@ def _format_agm_result(data: dict) -> str:
             f"| {passed_fmt} "
             f"| {item.get('approval_rate_issued', '')}% "
             f"| {item.get('approval_rate_voted', '')}% "
-            f"| {item.get('opposition_rate', '')}% |"
+            f"| {item.get('opposition_rate', '')}% "
+            f"| {att_str} |"
         )
 
     return "\n".join(lines)
