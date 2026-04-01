@@ -47,6 +47,8 @@
 - [x] ~~agm_guide tool — AI용 사용 가이드~~
 - [x] ~~CASE_DEFINITION을 agm_guide 응답에 포함 (AI 판단 기준)~~
 - [x] ~~own_* 지분 구조 tool 7개 (총 39개 tool, KOSPI 200 전수조사 199/199 OK)~~
+- [x] ~~agm_result tool — KIND 크롤링 기반 주총 투표결과 + 추정참석률 (총 40개 tool)~~
+- [x] ~~KOSPI 200 주총결과 전수 크롤링 → pipeline_result/ 199개 JSON~~
 - [ ] LLM fallback tool — XML 원문 + CASE_DEFINITION으로 AI 보강 (향후)
 
 ### PDF 파싱 보조 소스

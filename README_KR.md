@@ -46,7 +46,7 @@ API 한 번 호출. 구조화 완료. 바로 분석 가능.
 
 - [OpenDART API](https://opendart.fss.or.kr/) - 금융감독원 전자공시시스템
 
-## MCP Tool (39개)
+## MCP Tool (40개)
 
 ```
 agm(ticker)                  <- 종합 오케스트레이터
@@ -149,7 +149,7 @@ AI가 agm_personnel_xml(rcept_no) 호출
                              |
                              v
 +---------------------------------------------------------+
-|  shareholder.py - MCP Tool 레이어 (39개)                  |
+|  shareholder.py - MCP Tool 레이어 (40개)                  |
 |                                                          |
 |  agm_*_xml  - 1단계                                      |
 |  agm_*_pdf  - 2단계 (AI 자율 판단)                        |
@@ -164,7 +164,7 @@ AI가 agm_personnel_xml(rcept_no) 호출
 open_proxy_mcp/
   server.py           # FastMCP 서버 진입점 (stdio + SSE)
   tools/
-    shareholder.py    # AGM tool 32개 + 포매터
+    shareholder.py    # AGM tool 33개 + 포매터 (agm_result 포함)
     ownership.py      # 지분 구조 tool 7개 + 포매터
     parser.py         # XML 파서 - parse_*_xml()
     pdf_parser.py     # PDF 파서 - parse_*_pdf() + Upstage OCR fallback

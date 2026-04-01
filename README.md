@@ -46,7 +46,7 @@ One API call. Structured. Ready for analysis.
 
 - [OpenDART API](https://opendart.fss.or.kr/) — Korea Financial Supervisory Service Electronic Disclosure System
 
-## MCP Tools (39 tools)
+## MCP Tools (40 tools)
 
 ```
 agm(ticker)                  <- Orchestrator (one-call summary)
@@ -148,7 +148,7 @@ AI calls agm_personnel_xml(rcept_no)
                              |
                              v
 +---------------------------------------------------------+
-|  shareholder.py - MCP Tool Layer (39 tools)              |
+|  shareholder.py - MCP Tool Layer (40 tools)              |
 |                                                          |
 |  agm_*_xml  - Tier 1                                     |
 |  agm_*_pdf  - Tier 2 (AI decides autonomously)           |
@@ -163,7 +163,7 @@ AI calls agm_personnel_xml(rcept_no)
 open_proxy_mcp/
   server.py           # FastMCP server entry point (stdio + SSE)
   tools/
-    shareholder.py    # 32 AGM tools + formatters
+    shareholder.py    # 33 AGM tools + formatters (incl. agm_result)
     ownership.py      # 7 ownership tools + formatters
     parser.py         # XML parsers - parse_*_xml()
     pdf_parser.py     # PDF parsers - parse_*_pdf() + Upstage OCR fallback
