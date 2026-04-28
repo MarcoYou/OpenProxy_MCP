@@ -1,0 +1,2200 @@
+{
+  "schema_version": "v2",
+  "generated_at": "2026-04-29",
+  "policy_id": "open_proxy",
+  "v1_2_note": "v1.2 (2026-04-29) — ISS 다운그레이드. ISS-only dim (climate_accountability_signal) 제거, climate_disclosure는 한국 KOSPI 자산 2조원+ TCFD 의무화 (자본시장법 §161의2) 기반으로만 유지. ISS-only bingo patterns 제거. bundled_slate_signal·bundled_articles_signal·overboarded(concurrent_positions)는 한국 운용사·상법 합치 영역으로 유지. adverse_news는 수동 채점 (향후 자동화 예정)",
+  "philosophy": [
+    "각 카테고리 8 dim — OPM data tool에서 자동 추출 가능해야 함",
+    "각 dim 0/1/2 점수 (red/yellow/green) — 16점 만점",
+    "5+ 빙고 패턴 — 정량 임계 + 정성 신호 결합",
+    "단일 체크리스트(linear) 아닌 다차원 매트릭스(matrix) + 패턴(bingo) 결합"
+  ],
+  "scoring_model": {
+    "max_score_per_dim": 2,
+    "max_score_total": 16,
+    "thresholds": {
+      "for": "≥12 + 모든 dim ≥1",
+      "review": "8-11 또는 (≥12이지만 1+ dim red)",
+      "against": "≤7 또는 2+ dim red"
+    },
+    "bingo_override": "빙고 패턴 매칭 시 점수 결과 무관 패턴 결정 우선"
+  },
+  "matrices": {
+    "matrix_director_election": {
+      "category": "director_election",
+      "dimensions": [
+        {
+          "dim_id": "outside_director_independence",
+          "label": "사외이사 독립성 (5년 룰)",
+          "evaluator": "shareholder_meeting + naver_news",
+          "scoring": {
+            "green_2": "5년 룰 + 거래관계 X + adverse news 0",
+            "yellow_1": "5년 내 1-2년 의심 또는 약한 거래 관계",
+            "red_0": "5년 내 회사·계열 임직원 또는 명백 거래 관계 (강행규정 §542의8)"
+          },
+          "data_source": [
+            "shareholder_meeting.candidates",
+            "search_naver_news",
+            "agm_candidate_career"
+          ],
+          "law_basis": "상법 §542의8 ② (강행규정)"
+        },
+        {
+          "dim_id": "tenure",
+          "label": "재직년수 (사외이사 6년/9년 룰)",
+          "scoring": {
+            "green_2": "≤5년",
+            "yellow_1": "5-6년",
+            "red_0": ">6년 (계열사 합산 9년)"
+          },
+          "data_source": [
+            "shareholder_meeting.candidates.career",
+            "agm_candidate_tenure"
+          ],
+          "law_basis": "상법 §542의8 ② 7호 + 시행령 §34 ⑤"
+        },
+        {
+          "dim_id": "concurrent_positions",
+          "label": "겸직 (상장사) — 한국 상법 §382의3 + 시행령 §34 + 한투 정량",
+          "scoring": {
+            "green_2": "1개 이내 (본인 회사 포함)",
+            "yellow_1": "2개",
+            "red_0": "사외이사 3개사 이상 또는 상장사 임원 2개사 이상 (한투 정량 + 한국 상법 §382의3 위반)"
+          },
+          "data_source": [
+            "shareholder_meeting.candidates.concurrent",
+            "agm_candidate_concurrent"
+          ],
+          "law_basis": "상법 §382의3 (충실의무), §397 (경업금지), 시행령 §34",
+          "foreign_reference_note": "외국계 운용사 (베어링) 동일 입장 (>2 boards) — ISS 참조 사례",
+          "v1_2_note": "v1.2: 한국 상법 + 한투 정량 중심으로 재정렬. 베어링은 외국계 ISS 참조 사례로만 표시"
+        },
+        {
+          "dim_id": "attendance",
+          "label": "이사회 출석률 (재선임 시)",
+          "scoring": {
+            "green_2": "≥90%",
+            "yellow_1": "75-89%",
+            "red_0": "<75%"
+          },
+          "data_source": [
+            "corp_gov_report.board_meetings",
+            "gov_kosdaq_attendance"
+          ],
+          "law_basis": "상법 §382의3, §391, KRX 핵심지표"
+        },
+        {
+          "dim_id": "adverse_news",
+          "label": "후보자 부정 보도 (배임·횡령·환경 등)",
+          "scoring": {
+            "green_2": "보도 0",
+            "yellow_1": "경미 1-2건",
+            "red_0": "중대 보도 1건+ (배임·횡령 유죄, 회계부정 등)"
+          },
+          "data_source": [
+            "search_naver_news",
+            "naver_news_aggregator"
+          ],
+          "law_basis": "상법 §399, §401",
+          "scoring_mode": "manual",
+          "v1_2_note": "v1.2: 현재 수동 채점. 향후 search_naver_news + LLM 분류로 자동화 예정 (배임·횡령·회계부정 키워드 + 유죄/제재/혐의 단계 분류)"
+        },
+        {
+          "dim_id": "fiduciary_duty_signal",
+          "label": "충실의무 §382의3 위반 신호 (2025 강화)",
+          "scoring": {
+            "green_2": "위반 신호 0",
+            "yellow_1": "약한 신호 (대주주 우호 패턴 등)",
+            "red_0": "명백 위반 신호 (자기거래 + 사외이사 추천 일치, 총수일가 후보)"
+          },
+          "data_source": [
+            "related_party_transaction",
+            "ownership_structure",
+            "own_shareholder_relations"
+          ],
+          "law_basis": "상법 §382의3 (2025 강화 — 회사+주주 양방향)"
+        },
+        {
+          "dim_id": "governance_compliance_rate",
+          "label": "기업지배구조보고서 준수율 (회사 전체 15원칙)",
+          "scoring": {
+            "green_2": "≥80% (KOSPI 평균 55.3% 상회)",
+            "yellow_1": "60-79%",
+            "red_0": "<60%"
+          },
+          "data_source": [
+            "corp_gov_report.compliance_rate",
+            "gov_compliance_rate"
+          ],
+          "law_basis": "KRX 기업지배구조보고서, 자본시장법 §161의2",
+          "korea_2026_law": "KOSPI 전체 842사 의무 (2026)"
+        },
+        {
+          "dim_id": "diversity",
+          "label": "이사회 다양성 (성별·전문성)",
+          "scoring": {
+            "green_2": "여성 1명+ + 전문성 다양 (자산 2조원+ 의무)",
+            "yellow_1": "여성 1명+ 또는 전문성 다양",
+            "red_0": "둘 다 X (자본시장법 §165의20 ② 위반)"
+          },
+          "data_source": [
+            "shareholder_meeting.board_composition",
+            "agm_board_diversity"
+          ],
+          "law_basis": "자본시장법 §165의20 ② (자산 2조원+ 의무)"
+        },
+        {
+          "dim_id": "bundled_slate_signal",
+          "label": "묶음 선임 시 한 명이라도 거버넌스 결격 (한국 silent 영역, align_partners 동조)",
+          "evaluator": "shareholder_meeting + 매트릭스 다른 dim 참조",
+          "scoring": {
+            "green_2": "개별 표결 또는 묶음 선임 + 모든 후보 격조 양호 (다른 dim 모두 green/yellow)",
+            "yellow_1": "묶음 선임 + 일부 후보 yellow (경미한 의심)",
+            "red_0": "묶음 선임 + 한 명이라도 다른 dim red (5년 룰·6년 룰·과도겸임·출석률 미달·기업가치 훼손)"
+          },
+          "data_source": [
+            "shareholder_meeting.bundled_election",
+            "all other dims"
+          ],
+          "law_basis": "한국 5 운용사 silent + align_partners 별지 Ⅱ-2 (12)",
+          "foreign_reference_note": "외국계 운용사 (베어링) 동일 입장 — ISS 참조 사례",
+          "v1_2_note": "v1.2: ISS 다운그레이드 후 align_partners (행동주의) 입장 중심으로 재정렬"
+        }
+      ],
+      "scoring": {
+        "max_score": 16,
+        "thresholds": {
+          "for": "≥12 + 모든 dim ≥1",
+          "review": "8-11 또는 (≥12이지만 1+ dim red)",
+          "against": "≤7 또는 2+ dim red"
+        }
+      },
+      "bingo_patterns": [
+        {
+          "pattern_id": "all_green",
+          "condition": "모든 dim = 2",
+          "decision": "for",
+          "rationale": "완벽 후보 — 자동 찬성"
+        },
+        {
+          "pattern_id": "independence_red_x_fiduciary_red",
+          "condition": "outside_director_independence=0 AND fiduciary_duty_signal=0",
+          "decision": "against",
+          "rationale": "독립성 결여 + 충실의무 위반 신호 — A1+A3+A7 합의. 강행규정 §542의8 + §382의3 동시 위반"
+        },
+        {
+          "pattern_id": "tenure_red_only",
+          "condition": "tenure=0 AND others ≥1",
+          "decision": "against",
+          "rationale": "6년 초과 — 5/5 한국 운용사 합의 + A4+A7 강행규정"
+        },
+        {
+          "pattern_id": "compliance_high_x_signal_red",
+          "condition": "governance_compliance_rate=2 AND fiduciary_duty_signal=0",
+          "decision": "review",
+          "rationale": "보고서 준수율 높은데 충실의무 신호 발견 — 모순 의심, 추가 확인"
+        },
+        {
+          "pattern_id": "adverse_news_red",
+          "condition": "adverse_news=0",
+          "decision": "review",
+          "rationale": "중대 부정 보도 — 사용자 검토 필수 (배임·횡령 유죄 시 against)"
+        },
+        {
+          "pattern_id": "attendance_red",
+          "condition": "attendance=0",
+          "decision": "against",
+          "rationale": "출석률 75% 미만 — 5/5 합의 코어 룰. 충실의무 최저선 미충족"
+        },
+        {
+          "pattern_id": "concurrent_red_x_attendance_yellow",
+          "condition": "concurrent_positions=0 AND attendance=1",
+          "decision": "against",
+          "rationale": "과도 겸임 + 출석률 저하 — 충실의무 수행 불가능"
+        },
+        {
+          "pattern_id": "korea_2026_independent_director_red",
+          "condition": "회사 독립이사 비율 < 1/3 AND 안건이 사외이사 선임",
+          "decision": "against",
+          "rationale": "2026.07 독립이사 1/3 의무 위반"
+        },
+        {
+          "pattern_id": "bundled_slate_red",
+          "condition": "bundled_slate_signal=0",
+          "decision": "against",
+          "rationale": "[v1.2] 묶음 선임 + 한 명이라도 다른 dim red — 슬레이트 전체 against (align_partners 행동주의 동조)"
+        }
+      ]
+    },
+    "matrix_director_compensation": {
+      "category": "director_compensation",
+      "dimensions": [
+        {
+          "dim_id": "utilization_rate",
+          "label": "전기 보수한도 소진율",
+          "scoring": {
+            "green_2": "70-95% (적정 활용)",
+            "yellow_1": "50-69% 또는 95-100%",
+            "red_0": "<30% 또는 >100% (한도 초과)"
+          },
+          "data_source": [
+            "agm_compensation.previous_year",
+            "compensation_utilization"
+          ],
+          "law_basis": "상법 §388"
+        },
+        {
+          "dim_id": "yoy_change",
+          "label": "전년 대비 한도 변동",
+          "scoring": {
+            "green_2": "±10% 이내 (안정적)",
+            "yellow_1": "10-50% 변동",
+            "red_0": ">50% 인상 (M&A·대형 IPO 사유 외)"
+          },
+          "data_source": [
+            "agm_compensation.yoy_comparison"
+          ],
+          "law_basis": "상법 §382의3 (충실의무)"
+        },
+        {
+          "dim_id": "ceo_pay_ratio",
+          "label": "CEO 보수 / 직원 평균 (peer 대비)",
+          "scoring": {
+            "green_2": "동종업계 P50 이하 (50배 미만)",
+            "yellow_1": "동종업계 P50-P75 (50-100배)",
+            "red_0": "동종업계 P75 초과 또는 100배 초과"
+          },
+          "data_source": [
+            "compensation_disclosure",
+            "industry_peer_comparison"
+          ],
+          "law_basis": "Dodd-Frank §953(b), 자본시장법 §159"
+        },
+        {
+          "dim_id": "performance_link",
+          "label": "TSR·영업이익 연계 공시 (한국 2026.05 신법 + 한국 5 운용사 + align_partners)",
+          "scoring": {
+            "green_2": "TSR + 영업이익 + KPI 정량 공시 + 성과연동 60% 이상 + 3년 이상 이연",
+            "yellow_1": "TSR 공시만 또는 정성 KPI",
+            "red_0": "성과 연계 부재 또는 공시 미흡 — 5/5 한국 운용사 + align_partners 6/7 against"
+          },
+          "data_source": [
+            "compensation_disclosure_2026",
+            "tsr_data"
+          ],
+          "law_basis": "기업공시서식 작성기준 (2026.05 시행)",
+          "korea_2026_law": "임원보수 공시 시 TSR·영업이익 병기 (2026.05)",
+          "foreign_reference_note": "외국계 운용사 (베어링) 동일 입장 (ISS Stock Option Grants 성과 연계 권장) — ISS 참조 사례. Dodd-Frank §954 / SEC Clawback Rule (2023.10) / UK IA Principles는 글로벌 보조 reference",
+          "v1_2_note": "v1.2: ISS 다운그레이드 후 한국 5 운용사 + align_partners 6/7 against 중심으로 재정렬"
+        },
+        {
+          "dim_id": "stock_option_dilution",
+          "label": "스톡옵션 희석률",
+          "scoring": {
+            "green_2": "<2% (트러스톤·한투 표준)",
+            "yellow_1": "2-5%",
+            "red_0": ">5% 누적 희석 또는 >2% 단일 부여 (또는 강행규정 위반: 2년 vesting 단축, repricing)"
+          },
+          "data_source": [
+            "agm_stock_option",
+            "stock_option_history"
+          ],
+          "law_basis": "상법 §340의2, §340의4 (강행규정)"
+        },
+        {
+          "dim_id": "retirement_pay",
+          "label": "퇴직금 규정 변경 (황금낙하산)",
+          "scoring": {
+            "green_2": "변경 없음 또는 표준 범위",
+            "yellow_1": "10-20% 인상 (정당 사유)",
+            "red_0": "황금낙하산 또는 연봉 3배 초과 퇴직금 정관 도입"
+          },
+          "data_source": [
+            "agm_retirement_pay",
+            "articles_amendment_proposal"
+          ],
+          "law_basis": "상법 §388, §385"
+        },
+        {
+          "dim_id": "company_performance",
+          "label": "회사 적자 여부 + 직전 3년 TSR",
+          "scoring": {
+            "green_2": "흑자 + TSR 양수",
+            "yellow_1": "흑자 but TSR 음수 또는 적자 but TSR 양수",
+            "red_0": "적자 + TSR 음수 + 보수 인상"
+          },
+          "data_source": [
+            "financial_statements",
+            "tsr_calculation"
+          ],
+          "law_basis": "상법 §382의3 (충실의무 위반 추정)"
+        },
+        {
+          "dim_id": "clawback_say_on_pay_signal",
+          "label": "Clawback 정책 + Say-on-Pay 자율 도입 시그널",
+          "scoring": {
+            "green_2": "Clawback 5년 + Say-on-Pay 자문적 결의 자율 도입",
+            "yellow_1": "Clawback 정책만 또는 보상위원회 사외이사 100%",
+            "red_0": "둘 다 부재 + 사외이사 퇴직혜택 부여"
+          },
+          "data_source": [
+            "compensation_policy_disclosure",
+            "say_on_pay_voluntary"
+          ],
+          "law_basis": "Dodd-Frank §954, KCGS 모범규준"
+        }
+      ],
+      "scoring": {
+        "max_score": 16,
+        "thresholds": {
+          "for": "≥12 + 모든 dim ≥1",
+          "review": "8-11",
+          "against": "≤7 또는 2+ dim red"
+        }
+      },
+      "bingo_patterns": [
+        {
+          "pattern_id": "deficit_x_increase",
+          "condition": "company_performance=0 AND yoy_change=0",
+          "decision": "against",
+          "rationale": "적자 + TSR 음수인데 50%+ 인상 — A1+A3+A5+A7 충실의무 위반 합의"
+        },
+        {
+          "pattern_id": "low_utilization_x_increase",
+          "condition": "utilization_rate=0 AND yoy_change=0",
+          "decision": "against",
+          "rationale": "소진율 30% 미만인데 인상 — 명백한 한도 부풀림"
+        },
+        {
+          "pattern_id": "stock_option_red",
+          "condition": "stock_option_dilution=0",
+          "decision": "against",
+          "rationale": "희석 5% 초과 또는 강행규정 위반 (repricing, 2년 vesting 단축)"
+        },
+        {
+          "pattern_id": "retirement_red_alone",
+          "condition": "retirement_pay=0",
+          "decision": "against",
+          "rationale": "황금낙하산 또는 연봉 3배 초과 퇴직금 — 5/5 합의"
+        },
+        {
+          "pattern_id": "perf_link_red_2026",
+          "condition": "performance_link=0 AND 안건일 ≥ 2026-05",
+          "decision": "against",
+          "rationale": "2026.05 신법 (TSR 병기 의무) 위반"
+        },
+        {
+          "pattern_id": "ceo_pay_ratio_red_x_perf_red",
+          "condition": "ceo_pay_ratio=0 AND company_performance=0",
+          "decision": "against",
+          "rationale": "P75 초과 + 적자 — 명백한 충실의무 위반"
+        },
+        {
+          "pattern_id": "perf_link_x_clawback_red",
+          "condition": "performance_link=0 AND clawback_say_on_pay_signal=0",
+          "decision": "against",
+          "rationale": "[v1.2] 성과 미연계 + Clawback 부재 — 한국 5 운용사 + 행동주의 6/7 (베어링은 외국계 ISS 참조 사례)"
+        }
+      ]
+    },
+    "matrix_articles_amendment": {
+      "category": "articles_amendment",
+      "dimensions": [
+        {
+          "dim_id": "shareholder_rights_impact",
+          "label": "주주권리 영향 (강화 vs 축소)",
+          "scoring": {
+            "green_2": "주주권 강화 (전자투표·집중투표·소집공고 강화 등)",
+            "yellow_1": "중립 또는 절차적 변경",
+            "red_0": "주주권 축소 (소집청구권 제한 등 강행규정 §366 위반)"
+          },
+          "data_source": [
+            "articles_amendment_proposal",
+            "agm_articles_change"
+          ],
+          "law_basis": "상법 §366 (강행규정), §369",
+          "foreign_reference_note": "외국계 운용사 (베어링) 경영권 분쟁 시 이사회 구조·규모 변경 against 동일 — ISS 참조 사례",
+          "v1_2_note": "v1.2: 행동주의 (얼라인) 입장 중심으로 재정렬. 베어링은 외국계 ISS 참조 사례로만 표시"
+        },
+        {
+          "dim_id": "board_independence",
+          "label": "이사회 독립성 영향",
+          "scoring": {
+            "green_2": "사외이사 비중 확대 + 의장-CEO 분리 + LID 도입",
+            "yellow_1": "현상 유지",
+            "red_0": "사외이사 비중 축소 또는 의장-CEO 합치 또는 시차임기제 도입"
+          },
+          "data_source": [
+            "board_composition_change",
+            "articles_amendment_proposal"
+          ],
+          "law_basis": "상법 §542의8 ①"
+        },
+        {
+          "dim_id": "supermajority_voting",
+          "label": "초다수의결 조항",
+          "scoring": {
+            "green_2": "초다수의결 제한·삭제",
+            "yellow_1": "변경 없음",
+            "red_0": "초다수의결 신설 (3/4 이상)"
+          },
+          "data_source": [
+            "articles_amendment_proposal"
+          ],
+          "law_basis": "상법 §434"
+        },
+        {
+          "dim_id": "anti_takeover_provisions",
+          "label": "경영권 방어 조항 (황금낙하산·시차임기제·차등의결권)",
+          "scoring": {
+            "green_2": "방어 조항 없음 또는 제거",
+            "yellow_1": "약한 방어 조항 (정당 사유 있음)",
+            "red_0": "황금낙하산 / 시차임기제 / 차등의결권 도입"
+          },
+          "data_source": [
+            "articles_amendment_proposal"
+          ],
+          "law_basis": "상법 §388, §383 ②, §369"
+        },
+        {
+          "dim_id": "disclosure_compliance",
+          "label": "사전 공시 적정성 (5영업일 표준, KRX 4주 권고)",
+          "scoring": {
+            "green_2": "4주+ 사전 공시 (KRX 핵심지표 #1 충족)",
+            "yellow_1": "5영업일~4주",
+            "red_0": "5영업일 미만 (강행규정 §542의4 위반)"
+          },
+          "data_source": [
+            "agm_disclosure_date",
+            "kind_disclosure_date"
+          ],
+          "law_basis": "상법 §542의4 (강행규정), 자본시장법 §161"
+        },
+        {
+          "dim_id": "agm_to_board_shift",
+          "label": "주총 → 이사회 결의 사항 이관",
+          "scoring": {
+            "green_2": "이관 없음 또는 합리적 사유 (배당정책 공시 등)",
+            "yellow_1": "이관 + 부분적 사유",
+            "red_0": "주총 본질적 권한 이관 (합병·분할·정관변경·이사 선·해임) — 강행규정 §361 위반"
+          },
+          "data_source": [
+            "articles_amendment_proposal"
+          ],
+          "law_basis": "상법 §361 (강행규정)"
+        },
+        {
+          "dim_id": "company_name_change_signal",
+          "label": "회사명 변경 신호 (코붕이 criteria)",
+          "scoring": {
+            "green_2": "변경 없음 또는 단순 인지도 향상 + 무형가치 명백",
+            "yellow_1": "사업 정체성 변경 (장기 영향 분석 필요)",
+            "red_0": "모회사 종속 + 로열티 지급 의무 발생"
+          },
+          "data_source": [
+            "articles_amendment_proposal",
+            "ownership_structure"
+          ],
+          "law_basis": "상법 §289 ① 1호, §397 (회사 기회 유용)"
+        },
+        {
+          "dim_id": "korea_2026_law_alignment",
+          "label": "2026 신법 부합성 (전자주총·집중투표·LID 등)",
+          "scoring": {
+            "green_2": "신법 사전 채택 (전자주총·집중투표 도입·독립이사 1/3+)",
+            "yellow_1": "신법 시행 전 변경 없음",
+            "red_0": "신법 회피 시도 (집중투표 정관 배제 등)"
+          },
+          "data_source": [
+            "articles_amendment_proposal"
+          ],
+          "law_basis": "상법 §542의7 (2026.09), §542의8 (2026.07), §368-4 (2027.01)"
+        },
+        {
+          "dim_id": "bundled_articles_signal",
+          "label": "정관변경 묶음 상정 — 부정 조항 우세 시 전체 against (한국 §433 정관 묶음 관행)",
+          "evaluator": "articles_amendment_proposal",
+          "scoring": {
+            "green_2": "개별 항목 표결 또는 묶음 + 부정 조항 0",
+            "yellow_1": "묶음 + 부정 조항 1건 (균형 가능)",
+            "red_0": "묶음 + 부정 조항 (시차임기제·황금낙하산·주총→이사회 이관·초다수의결 신설 등)이 긍정 조항보다 우세"
+          },
+          "data_source": [
+            "articles_amendment_proposal",
+            "agm_articles_change"
+          ],
+          "law_basis": "상법 §433 (한국 정관변경 묶음 상정 관행) + A1+A4 절차적 정합성",
+          "foreign_reference_note": "외국계 운용사 (베어링) 동일 입장 — ISS 참조 사례",
+          "v1_2_note": "v1.2: 한국 상법 §433 + 한국 운용사 silent 영역으로 재정렬 (별도 채택). 베어링은 외국계 ISS 참조 사례로만 표시"
+        }
+      ],
+      "scoring": {
+        "max_score": 16,
+        "thresholds": {
+          "for": "≥12 + 모든 dim ≥1",
+          "review": "8-11",
+          "against": "≤7 또는 2+ dim red"
+        }
+      },
+      "bingo_patterns": [
+        {
+          "pattern_id": "rights_red_alone",
+          "condition": "shareholder_rights_impact=0",
+          "decision": "against",
+          "rationale": "주주권 축소 — 강행규정 §366 위반 절대 against"
+        },
+        {
+          "pattern_id": "anti_takeover_red",
+          "condition": "anti_takeover_provisions=0",
+          "decision": "against",
+          "rationale": "황금낙하산/시차임기제/차등의결권 도입 — 5/5 합의 + A1+A3+A5"
+        },
+        {
+          "pattern_id": "agm_to_board_red",
+          "condition": "agm_to_board_shift=0",
+          "decision": "against",
+          "rationale": "주총 본질적 권한 이관 — 강행규정 §361 위반 (A4+A7 합의)"
+        },
+        {
+          "pattern_id": "korea_2026_evasion",
+          "condition": "korea_2026_law_alignment=0",
+          "decision": "against",
+          "rationale": "2026 신법 회피 시도 (집중투표 배제 등)"
+        },
+        {
+          "pattern_id": "disclosure_red_x_critical_agenda",
+          "condition": "disclosure_compliance=0 AND 안건이 이사·감사 선임 또는 보수한도",
+          "decision": "against",
+          "rationale": "강행규정 §542의4 위반 + 핵심 안건"
+        },
+        {
+          "pattern_id": "company_name_red",
+          "condition": "company_name_change_signal=0",
+          "decision": "against",
+          "rationale": "모회사 종속 로열티 — A1+A7 충실의무 위반 우려"
+        },
+        {
+          "pattern_id": "bundled_articles_red",
+          "condition": "bundled_articles_signal=0",
+          "decision": "against",
+          "rationale": "[v1.2] 정관변경 묶음 + 부정 조항 우세 — 한국 상법 §433 정관 묶음 관행 + A1+A4 절차적 정합성"
+        }
+      ]
+    },
+    "matrix_audit_committee_election": {
+      "category": "audit_committee_election",
+      "dimensions": [
+        {
+          "dim_id": "3pct_rule_compliance",
+          "label": "3% 룰 회피 시도 여부 (§409 ②)",
+          "scoring": {
+            "green_2": "분리선출 적용 + 회피 시도 없음",
+            "yellow_1": "회피 시도 의심",
+            "red_0": "감사위원회 도입으로 §409 ② 회피 명백 (강행규정 위반)"
+          },
+          "data_source": [
+            "audit_committee_proposal",
+            "agm_3pct_rule"
+          ],
+          "law_basis": "상법 §409 ② (강행규정), §542의12 ⑦"
+        },
+        {
+          "dim_id": "separate_election",
+          "label": "감사위원 분리선출 (§542의12 ④)",
+          "scoring": {
+            "green_2": "분리선출 2명+ 적용 (2026.09 신법 사전 채택)",
+            "yellow_1": "분리선출 1명",
+            "red_0": "분리선출 미적용 (자산 1조원+ 의무 위반)"
+          },
+          "data_source": [
+            "audit_committee_election_method"
+          ],
+          "law_basis": "상법 §542의12 ④",
+          "korea_2026_law": "분리선출 2명 확대 (2026.09.10)"
+        },
+        {
+          "dim_id": "audit_opinion_history",
+          "label": "후보자 5년 내 적정 외 감사의견 또는 중요 제재 이력",
+          "scoring": {
+            "green_2": "이력 없음",
+            "yellow_1": "경미한 제재",
+            "red_0": "5년 내 적정 외 의견 또는 금감원 중요 제재"
+          },
+          "data_source": [
+            "search_naver_news",
+            "candidate_audit_history"
+          ],
+          "law_basis": "외감법 §10, §29, 상법 §415의2"
+        },
+        {
+          "dim_id": "non_audit_fee_ratio",
+          "label": "비감사용역 보수 / 감사용역 보수",
+          "scoring": {
+            "green_2": "<25% (글로벌 ISS 표준)",
+            "yellow_1": "25-100%",
+            "red_0": "비감사용역 보수 > 감사용역 보수 (Sarbanes-Oxley 정신)"
+          },
+          "data_source": [
+            "audit_fee_disclosure",
+            "external_auditor_fee"
+          ],
+          "law_basis": "외감법 §21, Sarbanes-Oxley §201"
+        },
+        {
+          "dim_id": "independence_5year",
+          "label": "감사위원 5년 내 임직원/특수관계인 (사외이사와 동일)",
+          "scoring": {
+            "green_2": "5년 룰 + 거래관계 X",
+            "yellow_1": "약한 의심",
+            "red_0": "5년 내 임직원/특수관계인 (강행규정 §542의11 위반)"
+          },
+          "data_source": [
+            "candidate_career",
+            "ownership_structure"
+          ],
+          "law_basis": "상법 §542의11"
+        },
+        {
+          "dim_id": "financial_expertise",
+          "label": "재무·회계 전문성 (§542의11 ②)",
+          "scoring": {
+            "green_2": "CPA 또는 재무전공 + 실무 5년+",
+            "yellow_1": "재무전공 또는 실무경력 있음",
+            "red_0": "전문가 0명 (강행규정 §542의11 ② 위반)"
+          },
+          "data_source": [
+            "candidate_qualification"
+          ],
+          "law_basis": "상법 §542의11 ② (강행규정)"
+        },
+        {
+          "dim_id": "fiduciary_duty_signal",
+          "label": "충실의무 §382의3 신호 (감사 독립성)",
+          "scoring": {
+            "green_2": "신호 없음",
+            "yellow_1": "약한 신호",
+            "red_0": "지배주주 우호 + 회사 추천 + 분리선출 미적용"
+          },
+          "data_source": [
+            "related_party_transaction",
+            "candidate_recommendation_source"
+          ],
+          "law_basis": "상법 §382의3 (2025)"
+        },
+        {
+          "dim_id": "compliance_rate",
+          "label": "기업지배구조보고서 감사위원회 관련 준수율",
+          "scoring": {
+            "green_2": "≥80%",
+            "yellow_1": "60-79%",
+            "red_0": "<60%"
+          },
+          "data_source": [
+            "corp_gov_report.audit_committee"
+          ],
+          "law_basis": "KRX 핵심지표"
+        }
+      ],
+      "scoring": {
+        "max_score": 16,
+        "thresholds": {
+          "for": "≥12 + 모든 dim ≥1",
+          "review": "8-11",
+          "against": "≤7 또는 2+ dim red"
+        }
+      },
+      "bingo_patterns": [
+        {
+          "pattern_id": "3pct_evasion",
+          "condition": "3pct_rule_compliance=0",
+          "decision": "against",
+          "rationale": "강행규정 §409 ② 회피 — 5/5 만장일치 + 7 전문가 절대 against"
+        },
+        {
+          "pattern_id": "audit_history_red",
+          "condition": "audit_opinion_history=0",
+          "decision": "against",
+          "rationale": "5년 내 적정 외 또는 중요 제재 — 5/5 합의 코어 룰"
+        },
+        {
+          "pattern_id": "non_audit_fee_red",
+          "condition": "non_audit_fee_ratio=0",
+          "decision": "against",
+          "rationale": "비감사용역 > 감사용역 — 4/5 합의 + 삼성바이오로직스 학습"
+        },
+        {
+          "pattern_id": "independence_red",
+          "condition": "independence_5year=0",
+          "decision": "against",
+          "rationale": "5년 룰 위반 — 강행규정 §542의11"
+        },
+        {
+          "pattern_id": "expertise_red",
+          "condition": "financial_expertise=0",
+          "decision": "against",
+          "rationale": "재무 전문가 0명 — 강행규정 §542의11 ② 위반"
+        },
+        {
+          "pattern_id": "korea_2026_separate_election_red",
+          "condition": "separate_election=0 AND 자산 ≥ 2조원 AND 안건일 ≥ 2026-09-10",
+          "decision": "against",
+          "rationale": "2026.09 신법 분리선출 2명 의무 위반"
+        }
+      ]
+    },
+    "matrix_treasury_share": {
+      "category": "treasury_share",
+      "dimensions": [
+        {
+          "dim_id": "burnout_commitment",
+          "label": "1년 내 소각 commitment (2026.03 신법)",
+          "scoring": {
+            "green_2": "1년 내 소각 commitment 명시 + 자본 환원 명백",
+            "yellow_1": "소각 의향 표시 (시점 미명시)",
+            "red_0": "소각 commitment 없음 (강행규정 §342 위반)"
+          },
+          "data_source": [
+            "treasury_share_proposal",
+            "buyback_plan"
+          ],
+          "law_basis": "상법 §342 개정 (2026.03.06 시행)",
+          "korea_2026_law": "자기주식 1년 내 의무소각"
+        },
+        {
+          "dim_id": "purpose_clarity",
+          "label": "취득·처분 목적 명확성",
+          "scoring": {
+            "green_2": "임직원 보상·M&A 등 명확한 사유 + 공시",
+            "yellow_1": "일반적 사유 (자본 환원 등)",
+            "red_0": "단순 보유 연장 또는 경영권 방어 (사유 미제시)"
+          },
+          "data_source": [
+            "treasury_share_proposal",
+            "kind_disclosure"
+          ],
+          "law_basis": "상법 §341, 자본시장법 §165-3"
+        },
+        {
+          "dim_id": "disposal_method",
+          "label": "처분 방법 (공개시장 vs 제3자 배정)",
+          "scoring": {
+            "green_2": "공개시장 매각 또는 소각",
+            "yellow_1": "임직원 보상 또는 적정 가격 제3자",
+            "red_0": "우호 제3자 배정 (자사주 마법) — 시장가 대비 저평가 가능"
+          },
+          "data_source": [
+            "disposal_method",
+            "third_party_identity"
+          ],
+          "law_basis": "상법 §342, §369 ③ (의결권 없음)"
+        },
+        {
+          "dim_id": "disposal_agm_approval",
+          "label": "처분 주총 승인 절차",
+          "scoring": {
+            "green_2": "처분 주총 승인 + 결과 보고 의무화",
+            "yellow_1": "처분 후 주총 보고",
+            "red_0": "이사회 단독 결정 + 주총 보고 없음 (자사주 마법 핵심 통로)"
+          },
+          "data_source": [
+            "disposal_governance"
+          ],
+          "law_basis": "상법 §342, A1+A3+A5+A7 권고"
+        },
+        {
+          "dim_id": "ownership_structure_signal",
+          "label": "지배주주·우호세력 의결권 강화 신호",
+          "scoring": {
+            "green_2": "신호 없음",
+            "yellow_1": "약한 신호 (지배주주 지분 변동 없음)",
+            "red_0": "분쟁 중 처분 또는 우호 백기사 매각 (한진칼 KCGI 패턴)"
+          },
+          "data_source": [
+            "ownership_structure",
+            "shareholder_dispute_history"
+          ],
+          "law_basis": "상법 §382의3 (충실의무 — 주주 동등 대우)",
+          "v1_1_note": "v1.1 강화 — 행동주의 (얼라인 별지 Ⅶ-3) 외부 인수 무력화 의도 적용. 자사주에도 동일 정신"
+        },
+        {
+          "dim_id": "treasury_share_ratio",
+          "label": "회사 자사주 비중 (시총 대비)",
+          "scoring": {
+            "green_2": "<3% (글로벌 평균 1-2%)",
+            "yellow_1": "3-7% (한국 평균)",
+            "red_0": ">7% (코스피 평균 초과)"
+          },
+          "data_source": [
+            "treasury_share_holding",
+            "ownership_data"
+          ],
+          "law_basis": "한국 자사주 마법 우려"
+        },
+        {
+          "dim_id": "shareholder_return_ratio",
+          "label": "주주환원율 (배당 + 자사주 매입 후 소각)",
+          "scoring": {
+            "green_2": "≥50% (글로벌 평균)",
+            "yellow_1": "30-49%",
+            "red_0": "<30% (한국 평균 — 자본 환원 부족)"
+          },
+          "data_source": [
+            "dividend_payout",
+            "buyback_actual"
+          ],
+          "law_basis": "MSCI Korea Total Return Analysis"
+        },
+        {
+          "dim_id": "fiduciary_duty_signal",
+          "label": "충실의무 §382의3 신호 (자사주 처분)",
+          "scoring": {
+            "green_2": "신호 없음",
+            "yellow_1": "약한 신호",
+            "red_0": "지배주주 우호 + 처분 후 의결권 부활 (§382의3 정면 위반)"
+          },
+          "data_source": [
+            "disposal_recipient_analysis"
+          ],
+          "law_basis": "상법 §382의3 (2025 강화)"
+        }
+      ],
+      "scoring": {
+        "max_score": 16,
+        "thresholds": {
+          "for": "≥12 + 모든 dim ≥1",
+          "review": "8-11",
+          "against": "≤7 또는 2+ dim red"
+        }
+      },
+      "bingo_patterns": [
+        {
+          "pattern_id": "korea_2026_burnout_red",
+          "condition": "burnout_commitment=0 AND 안건일 ≥ 2026-03-06",
+          "decision": "against",
+          "rationale": "2026.03 신법 자기주식 1년 내 의무소각 위반"
+        },
+        {
+          "pattern_id": "disposal_third_party_red",
+          "condition": "disposal_method=0 AND ownership_structure_signal=0",
+          "decision": "against",
+          "rationale": "우호 제3자 배정 + 분쟁 중 처분 = 자사주 마법 핵심 (한진칼 KCGI 패턴)"
+        },
+        {
+          "pattern_id": "purpose_red_x_no_burnout",
+          "condition": "purpose_clarity=0 AND burnout_commitment=0",
+          "decision": "against",
+          "rationale": "사유 미제시 + 소각 commitment 없음 — 5/5 합의"
+        },
+        {
+          "pattern_id": "fiduciary_red",
+          "condition": "fiduciary_duty_signal=0",
+          "decision": "against",
+          "rationale": "충실의무 §382의3 정면 위반 — A7 게임체인저 적용"
+        },
+        {
+          "pattern_id": "high_ratio_x_low_return",
+          "condition": "treasury_share_ratio=0 AND shareholder_return_ratio=0",
+          "decision": "review",
+          "rationale": "자사주 7%+ 보유 + 환원율 30% 미만 — 자본 환원 부족 신호"
+        },
+        {
+          "pattern_id": "burnout_compliant",
+          "condition": "burnout_commitment=2 AND purpose_clarity=2 AND fiduciary_duty_signal=2",
+          "decision": "for",
+          "rationale": "2026.03 신법 준수 + 명확 사유 + 충실의무 신호 없음"
+        }
+      ]
+    },
+    "matrix_cash_dividend": {
+      "category": "cash_dividend",
+      "dimensions": [
+        {
+          "dim_id": "payout_ratio_vs_industry",
+          "label": "배당성향 vs 동종업계 평균",
+          "scoring": {
+            "green_2": "동종업계 평균 ±50% 이내",
+            "yellow_1": "±50-100% 일탈 (정당 사유 있음)",
+            "red_0": "동종업계 평균 50% 미만 (과소) 또는 200% 초과 (과다)"
+          },
+          "data_source": [
+            "dividend_payout",
+            "industry_peer_data"
+          ],
+          "law_basis": "상법 §462, MSCI Korea Total Return",
+          "foreign_reference_note": "외국계 운용사 (베어링) 동일 입장 ('consistently low without justification') — ISS 참조 사례",
+          "v1_2_note": "v1.2: 행동주의 (얼라인 별지 Ⅰ-2) + 한국 4/5 (한투 silent) 중심으로 재정렬. 베어링은 외국계 ISS 참조 사례로만 표시"
+        },
+        {
+          "dim_id": "policy_disclosure",
+          "label": "배당정책 공시 (원칙·기준·절차)",
+          "scoring": {
+            "green_2": "배당정책 명시 + 3년 이상 일관성",
+            "yellow_1": "배당정책 일부 공시",
+            "red_0": "배당정책 미공시"
+          },
+          "data_source": [
+            "dividend_policy_disclosure",
+            "kind_disclosure"
+          ],
+          "law_basis": "자본시장법 §161의2, KRX 자율공시"
+        },
+        {
+          "dim_id": "cash_flow_sustainability",
+          "label": "영업현금흐름 + 차입 의존성",
+          "scoring": {
+            "green_2": "영업현금흐름 흑자 + 차입 무관",
+            "yellow_1": "영업현금흐름 음수 but 누적 잉여",
+            "red_0": "영업현금흐름 음수 + 차입 의존 배당"
+          },
+          "data_source": [
+            "financial_statements.cash_flow"
+          ],
+          "law_basis": "상법 §462 (배당가능이익)"
+        },
+        {
+          "dim_id": "interim_quarterly_dividend",
+          "label": "중간/분기 배당 채택",
+          "scoring": {
+            "green_2": "중간/분기 배당 + 선배당-후결의 표준",
+            "yellow_1": "연 1회 + 선배당-후결의",
+            "red_0": "연 1회 + 후배당-선결의 (깜깜이 배당)"
+          },
+          "data_source": [
+            "dividend_schedule"
+          ],
+          "law_basis": "상법 §462의3, 2024 정부 권고"
+        },
+        {
+          "dim_id": "dividend_decision_authority",
+          "label": "배당 결정 주체 (주총 vs 이사회)",
+          "scoring": {
+            "green_2": "주총 결의 (강행)",
+            "yellow_1": "이사회 결의 + 배당정책 공시",
+            "red_0": "이사회 결의 + 배당정책 미공시 (A3 활동가 기준)"
+          },
+          "data_source": [
+            "dividend_decision_method"
+          ],
+          "law_basis": "상법 §462 ② 단서"
+        },
+        {
+          "dim_id": "shareholder_return_ratio",
+          "label": "주주환원율 (배당 + 자사주 매입 후 소각)",
+          "scoring": {
+            "green_2": "≥50%",
+            "yellow_1": "30-49%",
+            "red_0": "<30%"
+          },
+          "data_source": [
+            "total_shareholder_return"
+          ],
+          "law_basis": "MSCI Korea, OECD Principles"
+        },
+        {
+          "dim_id": "controlling_shareholder_signal",
+          "label": "지배주주 자금화 신호 (잉여금 통제)",
+          "scoring": {
+            "green_2": "잉여금 합리적 사용 + 주주환원",
+            "yellow_1": "잉여금 누적 (사용 미공시)",
+            "red_0": "잉여금 비대한데 배당 과소 + 지배주주 자금화 의심"
+          },
+          "data_source": [
+            "retained_earnings",
+            "ownership_concentration"
+          ],
+          "law_basis": "상법 §382의3 (충실의무)"
+        },
+        {
+          "dim_id": "compliance_rate",
+          "label": "기업지배구조보고서 배당 관련 준수율",
+          "scoring": {
+            "green_2": "≥80%",
+            "yellow_1": "60-79%",
+            "red_0": "<60%"
+          },
+          "data_source": [
+            "corp_gov_report.dividend_policy"
+          ],
+          "law_basis": "KRX 핵심지표"
+        }
+      ],
+      "scoring": {
+        "max_score": 16,
+        "thresholds": {
+          "for": "≥12 + 모든 dim ≥1",
+          "review": "8-11",
+          "against": "≤7 또는 2+ dim red"
+        }
+      },
+      "bingo_patterns": [
+        {
+          "pattern_id": "underpayment_red",
+          "condition": "payout_ratio_vs_industry=0 AND controlling_shareholder_signal=0",
+          "decision": "against",
+          "rationale": "과소 배당 + 지배주주 자금화 의심 — 4/5 합의 + A1+A3 강화"
+        },
+        {
+          "pattern_id": "overpayment_red",
+          "condition": "payout_ratio_vs_industry=0 AND cash_flow_sustainability=0",
+          "decision": "against",
+          "rationale": "과다 배당 + 차입 의존 — 장기 가치 훼손"
+        },
+        {
+          "pattern_id": "board_decision_x_no_disclosure",
+          "condition": "dividend_decision_authority=0",
+          "decision": "against",
+          "rationale": "이사회 결의 + 배당정책 미공시 — A3 활동가 기준"
+        },
+        {
+          "pattern_id": "low_return_red",
+          "condition": "shareholder_return_ratio=0",
+          "decision": "review",
+          "rationale": "환원율 30% 미만 — 코리아 디스카운트 핵심"
+        },
+        {
+          "pattern_id": "all_green",
+          "condition": "모든 dim ≥1 AND 4+ dim = 2",
+          "decision": "for",
+          "rationale": "합리적 배당 + 정책 공시 + 환원율 충족"
+        },
+        {
+          "pattern_id": "underpayment_activist",
+          "condition": "payout_ratio_vs_industry=0 AND policy_disclosure ≤1",
+          "decision": "against",
+          "rationale": "[v1.2] 과소 배당 + 정책 미공시 — 행동주의 (얼라인) + 한국 4/5 운용사 against 통합 (베어링은 외국계 ISS 참조 사례)"
+        }
+      ]
+    },
+    "matrix_financial_statements": {
+      "category": "financial_statements",
+      "dimensions": [
+        {
+          "dim_id": "audit_opinion",
+          "label": "외부감사 의견 (적정/한정/부적정/의견거절)",
+          "scoring": {
+            "green_2": "적정의견",
+            "yellow_1": "한정의견 (경미)",
+            "red_0": "한정·부적정·의견거절 (강행규정 §449 + 외감법 §10)"
+          },
+          "data_source": [
+            "external_audit_opinion",
+            "kind_audit_report"
+          ],
+          "law_basis": "외감법 §10, 상법 §449"
+        },
+        {
+          "dim_id": "non_audit_fee_ratio",
+          "label": "비감사용역 보수 비율",
+          "scoring": {
+            "green_2": "<25% (글로벌 표준)",
+            "yellow_1": "25-100%",
+            "red_0": "비감사용역 > 감사용역"
+          },
+          "data_source": [
+            "audit_fee_disclosure"
+          ],
+          "law_basis": "외감법 §21, Sarbanes-Oxley §201"
+        },
+        {
+          "dim_id": "accounting_error_history",
+          "label": "회계오류 정정공시 이력 (1년 내)",
+          "scoring": {
+            "green_2": "이력 없음",
+            "yellow_1": "경미한 정정",
+            "red_0": "주요 회계오류 정정 (Doyle, Ge & McVay 2007 — 1년 내 -8% 초과수익률)"
+          },
+          "data_source": [
+            "accounting_correction_history",
+            "kind_correction"
+          ],
+          "law_basis": "외감법 §11"
+        },
+        {
+          "dim_id": "internal_control_weakness",
+          "label": "내부통제 평가 (감사인 보고)",
+          "scoring": {
+            "green_2": "취약점 0",
+            "yellow_1": "유의적 취약점 1-2건",
+            "red_0": "중대 취약점 (material weakness)"
+          },
+          "data_source": [
+            "internal_control_report"
+          ],
+          "law_basis": "외감법 §8"
+        },
+        {
+          "dim_id": "auditor_tenure",
+          "label": "감사인 재직년수 + 교체 이력",
+          "scoring": {
+            "green_2": "≤6년 + 정상 교체",
+            "yellow_1": "6-9년",
+            "red_0": ">9년 또는 잦은 교체 (4년 내 2회+)"
+          },
+          "data_source": [
+            "auditor_history"
+          ],
+          "law_basis": "외감법 §11의2 (감사인 주기적 지정)"
+        },
+        {
+          "dim_id": "auditor_independence_signal",
+          "label": "감사인-회사 임원진 관계 신호",
+          "scoring": {
+            "green_2": "관계 신호 0",
+            "yellow_1": "약한 관계 (전직 등)",
+            "red_0": "임원진 소속 회계법인 (A3 활동가 기준)"
+          },
+          "data_source": [
+            "auditor_firm_analysis",
+            "candidate_career"
+          ],
+          "law_basis": "외감법 §22"
+        },
+        {
+          "dim_id": "fiduciary_duty_signal",
+          "label": "재무제표 진정성 충실의무 신호",
+          "scoring": {
+            "green_2": "신호 없음",
+            "yellow_1": "약한 신호",
+            "red_0": "분식 의혹 보도 또는 거래 패턴 이상 (§382의3 위반)"
+          },
+          "data_source": [
+            "search_naver_news",
+            "transaction_pattern"
+          ],
+          "law_basis": "상법 §382의3, §401"
+        },
+        {
+          "dim_id": "compliance_disclosure",
+          "label": "기업지배구조보고서 재무 관련 준수율",
+          "scoring": {
+            "green_2": "≥80%",
+            "yellow_1": "60-79%",
+            "red_0": "<60% (2026 KOSPI 전체 의무)"
+          },
+          "data_source": [
+            "corp_gov_report.financial"
+          ],
+          "law_basis": "KRX 핵심지표, 자본시장법 §161의2"
+        },
+        {
+          "dim_id": "climate_disclosure",
+          "label": "TCFD 공시 부합성 (한국 KOSPI 자산 2조원+ TCFD 의무화 2024 기반)",
+          "evaluator": "esg_disclosure + corp_gov_report",
+          "scoring": {
+            "green_2": "TCFD 4대 영역 (거버넌스/전략/위험관리/지표 및 목표) 완전 공시",
+            "yellow_1": "TCFD 일부 공시 (1-2 영역만)",
+            "red_0": "KOSPI 자산 2조원+ TCFD 의무화 대상 + TCFD 부재 + Scope 1·2 미공시"
+          },
+          "data_source": [
+            "esg_disclosure.tcfd",
+            "sustainability_report",
+            "ghg_emissions"
+          ],
+          "law_basis": "자본시장법 §161의2 (KOSPI 자산 2조원+ TCFD 의무화 2024) + 한국 탄소중립·녹색성장 기본법 §27 (관리업체)",
+          "foreign_reference_note": "외국계 운용사 (베어링) ISS Climate Accountability — ISS 참조 사례. OPM은 한국 법령 기반 평가만 사용",
+          "v1_2_note": "v1.2: ISS Climate Accountability 다운그레이드. 한국 KOSPI 자산 2조원+ TCFD 의무화 (2024) 기반으로만 평가. default는 review/yellow"
+        }
+      ],
+      "scoring": {
+        "max_score": 16,
+        "thresholds": {
+          "for": "≥14 + audit_opinion=2",
+          "review": "8-13 또는 audit_opinion=1",
+          "against": "audit_opinion=0 또는 ≤7"
+        }
+      },
+      "bingo_patterns": [
+        {
+          "pattern_id": "non_appropriate_opinion",
+          "condition": "audit_opinion=0",
+          "decision": "against",
+          "rationale": "적정 외 의견 — 5/5 만장일치 + 7 전문가 절대 against (외감법 §10)"
+        },
+        {
+          "pattern_id": "error_x_internal_control",
+          "condition": "accounting_error_history=0 AND internal_control_weakness=0",
+          "decision": "against",
+          "rationale": "회계오류 + 중대 취약점 — A1 학자 강력 권고"
+        },
+        {
+          "pattern_id": "non_audit_fee_red",
+          "condition": "non_audit_fee_ratio=0",
+          "decision": "review",
+          "rationale": "비감사용역 > 감사용역 — 감사 독립성 침해 (audit_committee_election에서 보강)"
+        },
+        {
+          "pattern_id": "auditor_independence_red",
+          "condition": "auditor_independence_signal=0",
+          "decision": "review",
+          "rationale": "임원진 소속 회계법인 — A3 활동가 기준"
+        },
+        {
+          "pattern_id": "all_green",
+          "condition": "audit_opinion=2 AND others ≥1",
+          "decision": "for",
+          "rationale": "적정의견 + 신호 없음"
+        },
+        {
+          "pattern_id": "climate_disclosure_red",
+          "condition": "climate_disclosure=0 AND audit_opinion ≥1",
+          "decision": "review",
+          "rationale": "[v1.2] KOSPI 자산 2조원+ TCFD 의무화 위반 — 재무제표 자체는 통과되더라도 review 트리거 (한국 자본시장법 §161의2 기반)"
+        }
+      ]
+    },
+    "matrix_merger": {
+      "category": "merger",
+      "dimensions": [
+        {
+          "dim_id": "merger_ratio_fairness",
+          "label": "합병비율 공정성",
+          "scoring": {
+            "green_2": "독립 외부평가 + 비율 시장가 ±10% + 페어니스 의견 사전 공개",
+            "yellow_1": "외부평가 있음 + 비율 시장가 ±20%",
+            "red_0": "비율 현저히 불공정 (대법 2008다15520 적용)"
+          },
+          "data_source": [
+            "merger_ratio_disclosure",
+            "fairness_opinion"
+          ],
+          "law_basis": "상법 §523, §523의2, 자본시장법 §165-4"
+        },
+        {
+          "dim_id": "fairness_opinion_independence",
+          "label": "외부 평가기관 독립성",
+          "scoring": {
+            "green_2": "1년 내 동일 그룹 용역 0건 + 평가 방법·결과 모두 공시",
+            "yellow_1": "독립성 일부 의심",
+            "red_0": "지배주주 관계 평가기관 또는 평가 결과만 공시"
+          },
+          "data_source": [
+            "evaluator_relationship",
+            "evaluation_disclosure"
+          ],
+          "law_basis": "자본시장법 §165-4"
+        },
+        {
+          "dim_id": "controlling_shareholder_conflict",
+          "label": "지배주주 이해상충 (자기거래성)",
+          "scoring": {
+            "green_2": "지배주주 비관여 + 무관 거래",
+            "yellow_1": "지배주주 일부 이해 (소수주주 가치 보호)",
+            "red_0": "지배주주에 일방적 유리 (삼성물산-제일모직 패턴) — §397의2 위반 의심"
+          },
+          "data_source": [
+            "ownership_structure",
+            "transaction_analysis"
+          ],
+          "law_basis": "상법 §397의2, §382의3"
+        },
+        {
+          "dim_id": "MoM_simulation",
+          "label": "Majority of Minority 시뮬레이션",
+          "scoring": {
+            "green_2": "MoM 자율 적용 + 소수주주 50%+ 동의 예상",
+            "yellow_1": "MoM 시뮬레이션 결과 50%+",
+            "red_0": "MoM 시뮬레이션 50% 미만 또는 미적용"
+          },
+          "data_source": [
+            "mom_simulation",
+            "shareholder_voting_intent"
+          ],
+          "law_basis": "한국 미비, UK Takeover Code Rule 16, ISS Korea M&A"
+        },
+        {
+          "dim_id": "synergy_clarity",
+          "label": "시너지 명확성 + 장기 주주가치 제고",
+          "scoring": {
+            "green_2": "시너지 정량 분석 + 3년 이상 ROI 명시",
+            "yellow_1": "시너지 정성 명시",
+            "red_0": "시너지 모호 또는 단기 차익 중심"
+          },
+          "data_source": [
+            "merger_synergy_analysis",
+            "long_term_value_projection"
+          ],
+          "law_basis": "상법 §382의3 (장기 가치)"
+        },
+        {
+          "dim_id": "appraisal_right",
+          "label": "주식매수청구권 가격 적정성",
+          "scoring": {
+            "green_2": "이사회 결의일 전일 기준 2개월/1개월/1주일 가중평균 (금융위 가이드)",
+            "yellow_1": "표준 산정 + 일부 조정",
+            "red_0": "시장가 대비 저평가 또는 산정 방법 불투명"
+          },
+          "data_source": [
+            "appraisal_price_calculation"
+          ],
+          "law_basis": "상법 §374의2, §522의3, 금융위 가이드라인 (2022.09)"
+        },
+        {
+          "dim_id": "anti_takeover_signal",
+          "label": "왕관보석/그린메일 신호",
+          "scoring": {
+            "green_2": "신호 없음",
+            "yellow_1": "약한 방어 의도",
+            "red_0": "왕관보석 / 그린메일 / 자진 상장폐지 (소액주주 보호 미비)"
+          },
+          "data_source": [
+            "anti_takeover_proposal_analysis",
+            "merger_purpose"
+          ],
+          "law_basis": "상법 §382의3, §397의2"
+        },
+        {
+          "dim_id": "stakeholder_impact",
+          "label": "장기 stakeholder 영향 (종업원·서플라이체인·사회)",
+          "scoring": {
+            "green_2": "긍정적 영향 + ESG 분석 공시",
+            "yellow_1": "중립적 영향",
+            "red_0": "대규모 구조조정 또는 부정적 영향 미공시"
+          },
+          "data_source": [
+            "esg_impact_analysis",
+            "stakeholder_disclosure"
+          ],
+          "law_basis": "ICGN Principles §6"
+        }
+      ],
+      "scoring": {
+        "max_score": 16,
+        "thresholds": {
+          "for": "≥12 + 모든 dim ≥1",
+          "review": "8-11",
+          "against": "≤7 또는 2+ dim red"
+        }
+      },
+      "bingo_patterns": [
+        {
+          "pattern_id": "ratio_red_x_controlling_red",
+          "condition": "merger_ratio_fairness=0 AND controlling_shareholder_conflict=0",
+          "decision": "against",
+          "rationale": "삼성물산-제일모직 패턴 — A1+A3+A5+A7 합의"
+        },
+        {
+          "pattern_id": "MoM_red",
+          "condition": "MoM_simulation=0 AND controlling_shareholder_conflict=0",
+          "decision": "against",
+          "rationale": "MoM 50% 미만 + 지배주주 자기거래 — A1+A3+A5+A7 신규 입장"
+        },
+        {
+          "pattern_id": "fairness_independence_red",
+          "condition": "fairness_opinion_independence=0",
+          "decision": "against",
+          "rationale": "외부 평가기관 독립성 부재 — 두산밥캣 사례"
+        },
+        {
+          "pattern_id": "delisting_voluntary_red",
+          "condition": "anti_takeover_signal=0 AND appraisal_right=0",
+          "decision": "against",
+          "rationale": "자진 상장폐지 + 매수청구권 저평가 — 한국타이어·MBK 패턴"
+        },
+        {
+          "pattern_id": "synergy_red_x_stakeholder_red",
+          "condition": "synergy_clarity=0 AND stakeholder_impact=0",
+          "decision": "against",
+          "rationale": "시너지 모호 + stakeholder 부정 — 단기 차익 추정"
+        },
+        {
+          "pattern_id": "all_green_with_MoM",
+          "condition": "merger_ratio_fairness=2 AND MoM_simulation=2 AND fairness_opinion_independence=2",
+          "decision": "for",
+          "rationale": "공정 합병 + MoM 자율 적용 — OPM 모범 사례"
+        }
+      ]
+    },
+    "matrix_spin_off": {
+      "category": "spin_off",
+      "dimensions": [
+        {
+          "dim_id": "subsidiary_listing_plan",
+          "label": "자회사 상장 계획 (5년 내)",
+          "scoring": {
+            "green_2": "상장 계획 없음 (영구 비상장 commitment)",
+            "yellow_1": "5년 후 상장 계획 + 모회사 주주 보호 강화",
+            "red_0": "5년 내 상장 계획 또는 미공시"
+          },
+          "data_source": [
+            "spin_off_proposal",
+            "subsidiary_listing_plan"
+          ],
+          "law_basis": "자본시장법 §165의5, 거래소 상장규정 (5년 내 자회사 상장 심사)",
+          "korea_2026_law": "중복상장 원칙금지 (2026.07)"
+        },
+        {
+          "dim_id": "split_method",
+          "label": "분할 방식 (인적 vs 물적)",
+          "scoring": {
+            "green_2": "인적분할 + 모회사 주주 비례 배정",
+            "yellow_1": "물적분할 + 모회사 주주 신주 우선 청약권 부여 (Sweetener)",
+            "red_0": "물적분할 + 우선 청약권 미부여"
+          },
+          "data_source": [
+            "split_method",
+            "subsidiary_share_allocation"
+          ],
+          "law_basis": "상법 §530의2, §530의12"
+        },
+        {
+          "dim_id": "minority_shareholder_protection",
+          "label": "소수주주 보호 (매수청구권 등)",
+          "scoring": {
+            "green_2": "매수청구권 + 가격 산정 투명 + 사전 정보 공개",
+            "yellow_1": "매수청구권 부여 (가격 일부 의심)",
+            "red_0": "매수청구권 미부여 또는 저평가"
+          },
+          "data_source": [
+            "appraisal_right_disclosure",
+            "spin_off_disclosure"
+          ],
+          "law_basis": "자본시장법 §165의5 (반대주주 매수청구권)"
+        },
+        {
+          "dim_id": "fairness_evaluation",
+          "label": "분할 비율 산정 외부 평가 독립성",
+          "scoring": {
+            "green_2": "독립 평가 + 산정 방법·결과 모두 공시",
+            "yellow_1": "외부 평가 있음 + 일부 의심",
+            "red_0": "지배주주 관계 평가 또는 평가 부재"
+          },
+          "data_source": [
+            "evaluator_independence",
+            "evaluation_disclosure"
+          ],
+          "law_basis": "상법 §530의5"
+        },
+        {
+          "dim_id": "purpose_clarity",
+          "label": "분할 목적 명확성",
+          "scoring": {
+            "green_2": "사업 분리 명확 + 시너지 분석",
+            "yellow_1": "일반적 사업 분리",
+            "red_0": "지배주주 지배력 강화 또는 사익편취 의심 (롯데지주 패턴)"
+          },
+          "data_source": [
+            "spin_off_purpose",
+            "ownership_structure_change"
+          ],
+          "law_basis": "상법 §382의3"
+        },
+        {
+          "dim_id": "fiduciary_duty_signal",
+          "label": "충실의무 §382의3 신호 (모회사 주주 보호)",
+          "scoring": {
+            "green_2": "모회사 주주 가치 보전 명시",
+            "yellow_1": "약한 신호",
+            "red_0": "모회사 주주 가치 훼손 우려 (LG화학-LG에너지솔루션 패턴) — §382의3 (2025) 정면 위반"
+          },
+          "data_source": [
+            "fiduciary_duty_analysis"
+          ],
+          "law_basis": "상법 §382의3 (2025 강화 — 모회사 주주 보호)"
+        },
+        {
+          "dim_id": "korea_2026_law_compliance",
+          "label": "2026.07 신법 부합성 (중복상장 원칙금지)",
+          "scoring": {
+            "green_2": "원칙금지 적용 대상 + 면제 사유 (영업·경영 독립성 + 일반주주 동의 + 상장 필요성)",
+            "yellow_1": "원칙금지 적용 대상 X",
+            "red_0": "원칙금지 적용 대상 + 면제 사유 미충족"
+          },
+          "data_source": [
+            "company_size",
+            "subsidiary_listing_plan"
+          ],
+          "law_basis": "거래소 규정 + 자본시장법 (2026.07 시행)"
+        },
+        {
+          "dim_id": "info_disclosure",
+          "label": "사전 정보 공개 (이사회 결의 후 3일 내)",
+          "scoring": {
+            "green_2": "주요사항보고서 + 목적·기대효과·주주보호방안·자회사 상장 일정 모두 공시",
+            "yellow_1": "공시 일부 누락",
+            "red_0": "공시 미흡 또는 사후 공시"
+          },
+          "data_source": [
+            "disclosure_completeness"
+          ],
+          "law_basis": "기업공시서식 (2022.10 개정)"
+        }
+      ],
+      "scoring": {
+        "max_score": 16,
+        "thresholds": {
+          "for": "≥12 + 모든 dim ≥1 + split_method ≥1",
+          "review": "8-11",
+          "against": "≤7 또는 split_method=0 + subsidiary_listing_plan=0"
+        }
+      },
+      "bingo_patterns": [
+        {
+          "pattern_id": "physical_split_x_listing",
+          "condition": "subsidiary_listing_plan=0 AND split_method=0",
+          "decision": "against",
+          "rationale": "물적분할 + 자회사 상장 = LG엔솔 패턴 (모회사 주주 가치 훼손) — A1+A3+A5+A6+A7 5명 합의"
+        },
+        {
+          "pattern_id": "korea_2026_violation",
+          "condition": "korea_2026_law_compliance=0 AND 안건일 ≥ 2026-07",
+          "decision": "against",
+          "rationale": "2026.07 신법 중복상장 원칙금지 위반"
+        },
+        {
+          "pattern_id": "purpose_red_x_fiduciary_red",
+          "condition": "purpose_clarity=0 AND fiduciary_duty_signal=0",
+          "decision": "against",
+          "rationale": "지배주주 지배력 강화 + 모회사 주주 가치 훼손 — A7 §382의3 정면 적용"
+        },
+        {
+          "pattern_id": "fairness_independence_red",
+          "condition": "fairness_evaluation=0",
+          "decision": "against",
+          "rationale": "분할 비율 산정 독립성 부재 — A1+A3+A4+A7"
+        },
+        {
+          "pattern_id": "minority_protection_red",
+          "condition": "minority_shareholder_protection=0",
+          "decision": "against",
+          "rationale": "매수청구권 미부여 또는 저평가 — A3 활동가 + 자본시장법 §165의5"
+        },
+        {
+          "pattern_id": "info_disclosure_red",
+          "condition": "info_disclosure=0",
+          "decision": "review",
+          "rationale": "사전 정보 공개 미흡 — 2022.10 공시서식 개정"
+        }
+      ]
+    },
+    "matrix_capital_increase_decrease": {
+      "category": "capital_increase_decrease",
+      "dimensions": [
+        {
+          "dim_id": "issuance_size",
+          "label": "발행예정주식수 증가율",
+          "scoring": {
+            "green_2": "<25% (소규모)",
+            "yellow_1": "25-100%",
+            "red_0": ">100% (백지수표 신주발행 권한)"
+          },
+          "data_source": [
+            "share_authorization_change"
+          ],
+          "law_basis": "상법 §289 ① 3호, §416",
+          "foreign_reference_note": "외국계 운용사 (베어링) 수권자본 증가 100% 초과 + 정당화 없을 시 against 동일 — ISS 참조 사례",
+          "v1_2_note": "v1.2: 한국 4/5 운용사 합의 (백지수표 권한 against) 중심으로 재정렬. 베어링은 외국계 ISS 참조 사례로만 표시"
+        },
+        {
+          "dim_id": "preemptive_right",
+          "label": "신주인수권 보장",
+          "scoring": {
+            "green_2": "주주 배정 (강행 §418 ①)",
+            "yellow_1": "제3자 배정 (경영상 목적 명시 + 20% 미만)",
+            "red_0": "신주인수권 배제 + 20% 초과 (강행 §418 ② 위반)"
+          },
+          "data_source": [
+            "allocation_method",
+            "third_party_size"
+          ],
+          "law_basis": "상법 §418 (강행규정), UK Pre-emption 표준",
+          "foreign_reference_note": "외국계 운용사 (베어링) 동일 정량 — ISS 참조 사례",
+          "v1_2_note": "v1.2: 한국 상법 §418 ② + 한국 4/5 운용사 합의 + UK Pre-emption 표준 중심으로 재정렬"
+        },
+        {
+          "dim_id": "anti_takeover_signal",
+          "label": "경영권 방어 신호 (대법 2008다50776 적용)",
+          "scoring": {
+            "green_2": "방어 의도 신호 0",
+            "yellow_1": "약한 신호",
+            "red_0": "외부 인수 무력화 의도 명백 (강행규정 §418 ② 위반)"
+          },
+          "data_source": [
+            "anti_takeover_analysis",
+            "shareholder_dispute"
+          ],
+          "law_basis": "상법 §418 ②, 대법원 2008다50776",
+          "v1_1_note": "v1.1 강화 — 행동주의 (얼라인 별지 Ⅶ-3) 외부 인수 시도 무력화 의도 명백 시 against 통합"
+        },
+        {
+          "dim_id": "issuance_purpose",
+          "label": "발행 목적 합리성",
+          "scoring": {
+            "green_2": "스톡옵션 행사 / 상장폐지 회피 / 운전자본 (정당한 사유)",
+            "yellow_1": "사업 확장 / M&A (사유 일부 의심)",
+            "red_0": "지배주주 우호세력 배정 (사유 모호)"
+          },
+          "data_source": [
+            "issuance_purpose_disclosure"
+          ],
+          "law_basis": "상법 §416, §418 ②"
+        },
+        {
+          "dim_id": "issuance_price",
+          "label": "발행가 적정성",
+          "scoring": {
+            "green_2": "시장가 대비 ±10% + 산정 근거 명시",
+            "yellow_1": "시장가 대비 ±20% (할인 명분)",
+            "red_0": "시장가 대비 50%+ 할인 또는 산정 불투명"
+          },
+          "data_source": [
+            "issuance_price_calculation"
+          ],
+          "law_basis": "상법 §416 ②, 자본시장법 §165의6"
+        },
+        {
+          "dim_id": "capital_decrease_type",
+          "label": "자본감소 유형 (감자 시)",
+          "scoring": {
+            "green_2": "유상감자 + 주주가치 훼손 없음 또는 자사주 소각",
+            "yellow_1": "회생/구조조정/상장폐지 회피 (정당 사유)",
+            "red_0": "무상감자 + 정당 사유 없음 (강행 §439 위반 우려)"
+          },
+          "data_source": [
+            "capital_decrease_proposal"
+          ],
+          "law_basis": "상법 §438, §439, §445"
+        },
+        {
+          "dim_id": "fiduciary_duty_signal",
+          "label": "충실의무 §382의3 신호 (주주 동등 대우)",
+          "scoring": {
+            "green_2": "신호 없음",
+            "yellow_1": "약한 신호",
+            "red_0": "지배주주 우호 + 일반주주 희석 (§382의3 위반)"
+          },
+          "data_source": [
+            "dilution_analysis",
+            "ownership_change"
+          ],
+          "law_basis": "상법 §382의3 (2025)"
+        },
+        {
+          "dim_id": "disclosure_compliance",
+          "label": "공시 적정성",
+          "scoring": {
+            "green_2": "사전 공시 + 발행 조건 명시",
+            "yellow_1": "공시 일부 누락",
+            "red_0": "사후 공시 또는 자본시장법 §161의6 위반"
+          },
+          "data_source": [
+            "disclosure_completeness"
+          ],
+          "law_basis": "자본시장법 §161, §165의6"
+        }
+      ],
+      "scoring": {
+        "max_score": 16,
+        "thresholds": {
+          "for": "≥12 + 모든 dim ≥1",
+          "review": "8-11",
+          "against": "≤7 또는 2+ dim red"
+        }
+      },
+      "bingo_patterns": [
+        {
+          "pattern_id": "issuance_red_x_preemptive_red",
+          "condition": "issuance_size=0 AND preemptive_right=0",
+          "decision": "against",
+          "rationale": "100% 초과 증가 + 신주인수권 배제 — 4/5 합의 + 강행규정 §418 ② 위반"
+        },
+        {
+          "pattern_id": "anti_takeover_red",
+          "condition": "anti_takeover_signal=0",
+          "decision": "against",
+          "rationale": "외부 인수 무력화 의도 — 대법 2008다50776 무효"
+        },
+        {
+          "pattern_id": "preemptive_red_x_purpose_red",
+          "condition": "preemptive_right=0 AND issuance_purpose=0",
+          "decision": "against",
+          "rationale": "신주인수권 배제 + 사유 모호 — A3 활동가 강력 against"
+        },
+        {
+          "pattern_id": "capital_decrease_unjustified",
+          "condition": "capital_decrease_type=0",
+          "decision": "against",
+          "rationale": "무상감자 + 정당 사유 없음 — 5/5 합의"
+        },
+        {
+          "pattern_id": "issuance_price_red_x_third_party",
+          "condition": "issuance_price=0 AND preemptive_right=0",
+          "decision": "against",
+          "rationale": "저평가 발행 + 제3자 배정 — 사익편취 신호"
+        }
+      ]
+    },
+    "matrix_cb_bw": {
+      "category": "cb_bw",
+      "dimensions": [
+        {
+          "dim_id": "agm_resolution",
+          "label": "주총 결의 정관 채택 여부",
+          "scoring": {
+            "green_2": "주총 결의 정관 채택 (사모 CB/BW 남용 차단)",
+            "yellow_1": "이사회 결의 + 사후 공시",
+            "red_0": "이사회 단독 결정 + 정관에 주총 결의 미명시"
+          },
+          "data_source": [
+            "cb_bw_resolution_method",
+            "articles_amendment"
+          ],
+          "law_basis": "상법 §513 ②, §516의2 ②"
+        },
+        {
+          "dim_id": "dilution_rate",
+          "label": "희석률 (발행주식수 증가)",
+          "scoring": {
+            "green_2": "우선인수권 있음 <30% / 없음 <10% (A3 활동가 강화 기준)",
+            "yellow_1": "우선인수권 있음 30-50% / 없음 10-20%",
+            "red_0": "우선인수권 있음 ≥50% / 없음 ≥20% (트러스톤·한투 표준)"
+          },
+          "data_source": [
+            "dilution_calculation"
+          ],
+          "law_basis": "상법 §513, §516의2",
+          "foreign_reference_note": "외국계 운용사 (베어링) 동일 기준 — ISS 참조 사례",
+          "v1_2_note": "v1.2: 한국 트러스톤·한투 정량 + A3 활동가 강화 중심으로 재정렬. 베어링은 외국계 ISS 참조 사례로만 표시"
+        },
+        {
+          "dim_id": "refixing_clause",
+          "label": "전환가/행사가 사후 리픽싱 조항",
+          "scoring": {
+            "green_2": "리픽싱 조항 없음",
+            "yellow_1": "리픽싱 + 하한선 90%",
+            "red_0": "리픽싱 무한 또는 자동 인하 (한국 사모 CB/BW 핵심 폐단)"
+          },
+          "data_source": [
+            "cb_bw_terms_disclosure"
+          ],
+          "law_basis": "자본시장법 §165-10, 금감원 행정지도"
+        },
+        {
+          "dim_id": "call_option",
+          "label": "콜옵션 부 + 행사 시점",
+          "scoring": {
+            "green_2": "콜옵션 없음",
+            "yellow_1": "콜옵션 + 행사 시점 5년 후",
+            "red_0": "1년 내 콜옵션 행사 가능 (지배주주 우호세력 양도 통로)"
+          },
+          "data_source": [
+            "call_option_terms"
+          ],
+          "law_basis": "금감원 사모 CB/BW 행정지도 (2023)"
+        },
+        {
+          "dim_id": "third_party_independence",
+          "label": "인수자 독립성 (제3자 배정 시)",
+          "scoring": {
+            "green_2": "주주 배정 또는 독립 기관투자자",
+            "yellow_1": "독립 제3자 (검증 필요)",
+            "red_0": "지배주주 특수관계인 또는 우호세력"
+          },
+          "data_source": [
+            "third_party_identity"
+          ],
+          "law_basis": "상법 §513 ③"
+        },
+        {
+          "dim_id": "conversion_price",
+          "label": "전환가 / 행사가 적정성",
+          "scoring": {
+            "green_2": "시장가 90% 이상 + 보호예수 1년+",
+            "yellow_1": "시장가 80-90% (할인 명분)",
+            "red_0": "시장가 80% 미만 또는 보호예수 미설정"
+          },
+          "data_source": [
+            "conversion_price_calculation"
+          ],
+          "law_basis": "자본시장법 §165-10"
+        },
+        {
+          "dim_id": "issuance_purpose",
+          "label": "발행 목적 합리성",
+          "scoring": {
+            "green_2": "운전자본 / 시설투자 등 명확",
+            "yellow_1": "M&A 자금 (사유 일부 의심)",
+            "red_0": "지배주주 우호 또는 단기 차익 추정"
+          },
+          "data_source": [
+            "cb_bw_purpose_disclosure"
+          ],
+          "law_basis": "상법 §513 ③ (경영상 목적)"
+        },
+        {
+          "dim_id": "fiduciary_duty_signal",
+          "label": "충실의무 §382의3 신호",
+          "scoring": {
+            "green_2": "신호 없음",
+            "yellow_1": "약한 신호",
+            "red_0": "지배주주 사익편취 + 주주 동등 대우 위반"
+          },
+          "data_source": [
+            "transaction_pattern_analysis"
+          ],
+          "law_basis": "상법 §382의3 (2025)"
+        }
+      ],
+      "scoring": {
+        "max_score": 16,
+        "thresholds": {
+          "for": "≥12 + 모든 dim ≥1",
+          "review": "8-11",
+          "against": "≤7 또는 2+ dim red"
+        }
+      },
+      "bingo_patterns": [
+        {
+          "pattern_id": "dilution_red",
+          "condition": "dilution_rate=0",
+          "decision": "against",
+          "rationale": "50%/20% 희석 — 트러스톤·한투 정량 기준 + A3 활동가 강화"
+        },
+        {
+          "pattern_id": "refixing_red",
+          "condition": "refixing_clause=0",
+          "decision": "against",
+          "rationale": "리픽싱 무한 — A1+A3 한국 핵심 폐단 (박상인 2023)"
+        },
+        {
+          "pattern_id": "call_option_red",
+          "condition": "call_option=0 AND third_party_independence=0",
+          "decision": "against",
+          "rationale": "1년 내 콜옵션 + 우호세력 — 금감원 제재 패턴"
+        },
+        {
+          "pattern_id": "conversion_red_x_third_party_red",
+          "condition": "conversion_price=0 AND third_party_independence=0",
+          "decision": "against",
+          "rationale": "저가 발행 + 우호세력 배정 — A3 활동가 강력 against"
+        },
+        {
+          "pattern_id": "agm_resolution_for",
+          "condition": "agm_resolution=2",
+          "decision": "for (정관 변경 안건일 경우)",
+          "rationale": "주총 결의 정관 채택 — 5/5 명시 + 7 전문가 강력 권장"
+        }
+      ]
+    },
+    "matrix_shareholder_proposal": {
+      "category": "shareholder_proposal",
+      "dimensions": [
+        {
+          "dim_id": "esg_sustainability",
+          "label": "ESG/지속가능성 강화 안건",
+          "scoring": {
+            "green_2": "TCFD 공시 / Net-zero 목표 / 인권 실사 / 다양성 보고서",
+            "yellow_1": "일반 ESG 안건",
+            "red_0": "ESG 안건 없음 또는 부정적"
+          },
+          "data_source": [
+            "shareholder_proposal_content"
+          ],
+          "law_basis": "상법 §363의2, BlackRock 2024"
+        },
+        {
+          "dim_id": "minority_shareholder_protection",
+          "label": "소수주주 권리 강화 안건",
+          "scoring": {
+            "green_2": "감사위원 분리선출 / 신주발행 주총 승인 / 주주 정보권 강화",
+            "yellow_1": "일반 권리 강화",
+            "red_0": "권리 축소 또는 무관"
+          },
+          "data_source": [
+            "proposal_content_analysis"
+          ],
+          "law_basis": "상법 §363의2, §366"
+        },
+        {
+          "dim_id": "long_term_value_alignment",
+          "label": "장기 주주가치 제고",
+          "scoring": {
+            "green_2": "장기 ROI + 구조 개선",
+            "yellow_1": "중기 가치 (3년)",
+            "red_0": "단기 차익 + 자산 매각 (헤지펀드 액티비즘 단기성)"
+          },
+          "data_source": [
+            "proposal_long_term_analysis"
+          ],
+          "law_basis": "Bebchuk et al. (2015)"
+        },
+        {
+          "dim_id": "controlling_shareholder_conflict",
+          "label": "특정 주주 이해 추구 (사익편취 의심)",
+          "scoring": {
+            "green_2": "특정 주주 이해 무관",
+            "yellow_1": "약한 신호",
+            "red_0": "특정 주주 이해 추구 명백 (사익편취)"
+          },
+          "data_source": [
+            "proposer_analysis"
+          ],
+          "law_basis": "상법 §382의3"
+        },
+        {
+          "dim_id": "board_proposal_competition",
+          "label": "이사회안과 경합 시 비교",
+          "scoring": {
+            "green_2": "주주제안이 더 유리 (소수주주 보호)",
+            "yellow_1": "동등",
+            "red_0": "이사회안이 명백히 유리"
+          },
+          "data_source": [
+            "proposal_comparison"
+          ],
+          "law_basis": "상법 §363의2"
+        },
+        {
+          "dim_id": "proposer_independence",
+          "label": "제안자 독립성 (3% + 6개월)",
+          "scoring": {
+            "green_2": "독립 소수주주 + 6개월 보유",
+            "yellow_1": "기관투자자 (액티비스트 펀드)",
+            "red_0": "제안자 자격 결여 (3% 미만 + 6개월 미만)"
+          },
+          "data_source": [
+            "proposer_qualification"
+          ],
+          "law_basis": "상법 §363의2"
+        },
+        {
+          "dim_id": "non_implementation_history",
+          "label": "주주제안 미시행 이력",
+          "scoring": {
+            "green_2": "미시행 이력 없음",
+            "yellow_1": "1회 미시행",
+            "red_0": "다수 승인 후 미시행 (Glass Lewis Responsiveness)"
+          },
+          "data_source": [
+            "past_proposal_implementation"
+          ],
+          "law_basis": "상법 §382의3"
+        },
+        {
+          "dim_id": "korea_specific_dispute",
+          "label": "경영권 분쟁 시 신주발행/자사주 매각 주총 승인 안건",
+          "scoring": {
+            "green_2": "분쟁 중 + 주총 승인 요구 (한진칼 KCGI 패턴)",
+            "yellow_1": "잠재적 분쟁",
+            "red_0": "분쟁 무관"
+          },
+          "data_source": [
+            "dispute_status",
+            "proposal_context"
+          ],
+          "law_basis": "상법 §418, §342"
+        },
+        {
+          "dim_id": "active_engagement_signal",
+          "label": "[v1.1 신규] 행동주의 적극 행사 원칙 (얼라인 일반원칙 제3조 ②)",
+          "evaluator": "agenda_categorization",
+          "scoring": {
+            "green_2": "안건이 통상적 routine + 행동주의 silent 정당",
+            "yellow_1": "중간 중요도 안건",
+            "red_0": "안건이 합병/영업양수도/임원 임면/정관변경 등 중대 사항 — silent 금지, 적극 행사 필수 (얼라인 정책 + OPM 채택)"
+          },
+          "data_source": [
+            "agenda_classification"
+          ],
+          "law_basis": "한국 자본시장법 §159, §161 + 얼라인 일반원칙 제3조 ②",
+          "global_reference": "행동주의 적극 행사 원칙",
+          "v1_1_note": "v1.1 신규 — 얼라인 정책 채택. 중대 사항 안건은 silent/abstain 금지, OPM 매트릭스 결과대로 for/against 결정 필수"
+        }
+      ],
+      "scoring": {
+        "max_score": 16,
+        "thresholds": {
+          "for": "≥12 + 모든 dim ≥1",
+          "review": "8-11",
+          "against": "≤7 또는 2+ dim red"
+        }
+      },
+      "bingo_patterns": [
+        {
+          "pattern_id": "esg_for",
+          "condition": "esg_sustainability=2 AND long_term_value_alignment ≥1",
+          "decision": "for",
+          "rationale": "ESG 안건 + 장기 가치 — 5/5 합의 + BlackRock 2024"
+        },
+        {
+          "pattern_id": "minority_protection_for",
+          "condition": "minority_shareholder_protection=2",
+          "decision": "for",
+          "rationale": "소수주주 권리 강화 — 5/5 합의"
+        },
+        {
+          "pattern_id": "korea_dispute_for",
+          "condition": "korea_specific_dispute=2",
+          "decision": "for",
+          "rationale": "분쟁 중 신주발행 주총 승인 — 한진칼 KCGI 사례 (A1+A3+A5+A7)"
+        },
+        {
+          "pattern_id": "controlling_red_x_short_term",
+          "condition": "controlling_shareholder_conflict=0 AND long_term_value_alignment=0",
+          "decision": "against",
+          "rationale": "특정 주주 사익 + 단기 차익 — 5/5 합의"
+        },
+        {
+          "pattern_id": "non_implementation_director_link",
+          "condition": "non_implementation_history=0 AND 안건이 director_election과 연계",
+          "decision": "against (director_election 안건에서)",
+          "rationale": "주주 다수 승인 미시행 책임 이사 — Glass Lewis Responsiveness"
+        },
+        {
+          "pattern_id": "board_alternative_better",
+          "condition": "board_proposal_competition=0 AND minority_shareholder_protection ≤1",
+          "decision": "against",
+          "rationale": "이사회안 더 유리 + 소수주주 보호 약함"
+        },
+        {
+          "pattern_id": "active_engagement_required",
+          "condition": "active_engagement_signal=0",
+          "decision": "for_or_against (silent 금지)",
+          "rationale": "[v1.1] 중대 사항 안건은 OPM 매트릭스 결과대로 결정 — silent/abstain 안 함 (얼라인 행동주의 원칙)"
+        }
+      ]
+    }
+  },
+  "cross_cutting_dimensions": {
+    "fiduciary_duty_signal": {
+      "applicable_categories": [
+        "all 12"
+      ],
+      "law_basis": "상법 §382의3 (2025 강화)",
+      "rationale": "A7 게임체인저 — 모든 카테고리 매트릭스에 fiduciary_duty_signal dim 포함"
+    },
+    "korea_2026_law_compliance": {
+      "applicable_categories": [
+        "spin_off",
+        "treasury_share",
+        "audit_committee_election",
+        "articles_amendment",
+        "director_compensation",
+        "director_election"
+      ],
+      "law_basis": "2026 신법 7개",
+      "rationale": "A6 — 시점별 (2026.03 / 2026.05 / 2026.07 / 2026.09 / 2027.01) 자동 트리거"
+    },
+    "governance_compliance_rate": {
+      "applicable_categories": [
+        "all 12"
+      ],
+      "law_basis": "KRX 기업지배구조보고서 핵심지표 15원칙",
+      "rationale": "2026 KOSPI 전체 842사 의무 — 준수율 < 60% 시 모든 안건 review"
+    },
+    "controlling_shareholder_conflict_flag": {
+      "applicable_categories": [
+        "all 12"
+      ],
+      "rationale": "A2 운용사 출신 권고 — 그룹사 안건 자동 conflict_of_interest_flag 부착, 별도 통계 기록"
+    },
+    "climate_disclosure_signal": {
+      "applicable_categories": [
+        "financial_statements"
+      ],
+      "law_basis": "한국 자본시장법 §161의2 (KOSPI 자산 2조원+ TCFD 의무화 2024) + 탄소중립·녹색성장 기본법 §27",
+      "rationale": "[v1.2] 한국 KOSPI 자산 2조원+ TCFD 의무화 기반 평가만 사용. ISS Climate Accountability는 외국계 ISS 참조 사례로만 보존",
+      "foreign_reference_note": "외국계 운용사 (베어링) ISS Climate Accountability — 데이터 reference로만 보존, OPM 벤치마크 X"
+    },
+    "bundled_signal": {
+      "applicable_categories": [
+        "director_election",
+        "articles_amendment"
+      ],
+      "law_basis": "한국 5 운용사 silent + align_partners 별지 Ⅱ-2 (12) + 한국 상법 §433",
+      "rationale": "[v1.2] 한국 5 운용사 silent 영역. align_partners 행동주의 동조로 채택. 묶음 상정 관행에서 한 명/한 조항이라도 거버넌스 우려 시 슬레이트 전체 against",
+      "foreign_reference_note": "외국계 운용사 (베어링) 동일 입장 — ISS 참조 사례"
+    },
+    "active_engagement_principle": {
+      "applicable_categories": [
+        "all 12"
+      ],
+      "law_basis": "얼라인 일반원칙 제3조 ②",
+      "rationale": "[v1.1 신규] 행동주의 적극 행사 원칙 — 합병/영업양수도/임원 임면/정관변경 등 중대 사항 silent 금지"
+    }
+  },
+  "data_tool_mapping": {
+    "shareholder_meeting": [
+      "agm_*_xml",
+      "agm_disclosure",
+      "agm_candidate_*"
+    ],
+    "ownership_structure": [
+      "own_*",
+      "ownership_data"
+    ],
+    "naver_news": [
+      "search_naver_news",
+      "naver_news_aggregator"
+    ],
+    "corp_gov_report": [
+      "gov_*",
+      "corp_gov_compliance"
+    ],
+    "compensation_disclosure": [
+      "compensation_2026_disclosure",
+      "compensation_history"
+    ],
+    "cb_bw_terms": [
+      "cb_bw_disclosure",
+      "kind_disclosure"
+    ],
+    "merger_disclosure": [
+      "merger_disclosure",
+      "fairness_opinion_disclosure"
+    ],
+    "spin_off_disclosure": [
+      "spin_off_disclosure",
+      "subsidiary_listing_plan"
+    ],
+    "treasury_share": [
+      "treasury_share_history",
+      "buyback_disclosure"
+    ],
+    "dividend": [
+      "dividend_history",
+      "dividend_policy_disclosure"
+    ],
+    "audit_fee": [
+      "audit_fee_disclosure",
+      "external_auditor"
+    ],
+    "corp_identifier": [
+      "corp_identifier (그래프 중심 노드)"
+    ]
+  },
+  "completeness": {
+    "matrices_count": 12,
+    "total_dimensions": 100,
+    "total_bingo_patterns": 76,
+    "cross_cutting_dimensions": 7,
+    "data_tool_categories": 12,
+    "v1_1_changes": [
+      "matrix_director_election: dim 'concurrent_positions' 강화 (ISS >2 boards 정량) + dim 'bundled_slate_signal' 신규 + dim 'climate_accountability_signal' 신규 + bingo 2건 추가",
+      "matrix_financial_statements: dim 'climate_disclosure' 신규 (TCFD) + bingo 1건",
+      "matrix_director_compensation: dim 'performance_link' 강화 (행동주의 + ISS 통합) + bingo 1건",
+      "matrix_articles_amendment: dim 'bundled_articles_signal' 신규 (ISS) + 'shareholder_rights_impact' 강화 + bingo 1건",
+      "matrix_cash_dividend: dim 'payout_ratio_vs_industry' 강화 (행동주의) + bingo 1건",
+      "matrix_capital_increase_decrease: 'preemptive_right'/'issuance_size'/'anti_takeover_signal' 강화 (ISS + 행동주의)",
+      "matrix_cb_bw: 'dilution_rate' 강화 (ISS)",
+      "matrix_treasury_share: 'ownership_structure_signal' 강화 (행동주의)",
+      "matrix_shareholder_proposal: dim 'active_engagement_signal' 신규 (얼라인 행동주의) + bingo 1건",
+      "cross_cutting_dimensions: climate_accountability_signal, bundled_signal, active_engagement_principle 3건 신규"
+    ],
+    "v1_2_changes": [
+      "matrix_director_election: dim 'climate_accountability_signal' 제거 (ISS-only) + bingo 'climate_accountability_red' 제거. dim 'concurrent_positions'·'bundled_slate_signal' 한국 상법 + align_partners 중심으로 재정렬",
+      "matrix_financial_statements: dim 'climate_disclosure' 한국 KOSPI 자산 2조원+ TCFD 의무화 (2024) 기반으로 재정렬. ISS 참조 노트로만 보존",
+      "matrix_director_compensation: dim 'performance_link' bingo 'perf_link_x_clawback_red_v1_1' → 'perf_link_x_clawback_red'로 정규화. 한국 5 + 행동주의 6/7 중심",
+      "matrix_articles_amendment: dim 'bundled_articles_signal' 한국 상법 §433 정관 묶음 관행 기반으로 재정렬",
+      "matrix_cash_dividend: bingo 'underpayment_activist_iss' → 'underpayment_activist'로 정규화",
+      "cross_cutting_dimensions: 'climate_accountability_signal' → 'climate_disclosure_signal' (한국 KOSPI TCFD 의무화 기반). 'bundled_signal' 한국 상법 §433 + align_partners 기반으로 재정렬",
+      "adverse_news dim에 'scoring_mode: manual' + 향후 자동화 노트 추가",
+      "베어링 (외국계 ISS 참조 사례)는 모든 dim에서 'foreign_reference_note' 필드로 별도 표시"
+    ]
+  },
+  "updated_at": "2026-04-29",
+  "update_history": [
+    "v1 (2026-04-28): 12 카테고리 매트릭스 + 96 dims + 67 bingo patterns 초기 작성",
+    "v2 (2026-04-29): v1.1 통합 — baring(ISS) + align_partners(행동주의) dim 보강. 신규 dim: overboarded_director(>2 boards 정량), climate_disclosure(TCFD), bundled_slate_signal(ISS). performance_link 강화",
+    "v2.1 (2026-04-29): v1.2 ISS 다운그레이드 — climate_accountability_signal dim 제거, climate_disclosure는 한국 KOSPI TCFD 의무화 기반으로 재정렬, ISS-only bingo 제거. dim/bingo: 101→100 / 77→76. 베어링은 모든 dim에서 외국계 ISS 참조 사례로 표시"
+  ]
+}
