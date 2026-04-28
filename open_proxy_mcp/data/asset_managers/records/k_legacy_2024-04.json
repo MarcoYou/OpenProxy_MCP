@@ -1,8 +1,8 @@
 {
-  "manager_id": "kim",
-  "manager_name": "한국투자신탁운용",
+  "manager_id": "k_legacy",
+  "manager_name": "K레거시",
   "period_label": "2024.04",
-  "source_file": "2024.04 한국투자신탁운용 의결권 행사내역.xlsx",
+  "source_file": "2024.04 K레거시 의결권 행사내역.xlsx",
   "votes": [
     {
       "market": "KOSPI",

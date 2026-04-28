@@ -1,8 +1,8 @@
 {
-  "manager_id": "baring",
-  "manager_name": "베어링자산운용",
+  "manager_id": "b_foreign",
+  "manager_name": "B외국계",
   "period_label": "2024.04",
-  "source_file": "2024.04 베어링자산운용 의결권 행사내역.xlsx",
+  "source_file": "2024.04 B외국계 의결권 행사내역.xlsx",
   "votes": [
     {
       "market": "KOSDAQ",

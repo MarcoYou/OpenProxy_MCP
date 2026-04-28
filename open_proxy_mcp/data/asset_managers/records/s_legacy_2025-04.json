@@ -1,8 +1,8 @@
 {
-  "manager_id": "samsung",
-  "manager_name": "삼성자산운용",
+  "manager_id": "s_legacy",
+  "manager_name": "S레거시",
   "period_label": "2025.04",
-  "source_file": "2025.04 삼성자산운용 의결권 행사내역.xlsx",
+  "source_file": "2025.04 S레거시 의결권 행사내역.xlsx",
   "votes": [
     {
       "market": "KOSPI",
