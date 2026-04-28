@@ -145,31 +145,74 @@ _CATEGORY_KO = {
 def classify_agenda(agenda_title: str, agenda_type_raw: str = "") -> str:
     """안건명 + 의안유형 → 12 카테고리 매핑.
 
-    행사내역 xlsx 어댑터와 동일 매핑 규칙. 키워드 우선순위 중요.
+    우선순위 (위→아래):
+    1. 주주제안
+    2. 감사위원 (선임/해임 vs 분리선출 정관 변경 분기)
+    3. M&A (합병/분할/주식교환)
+    4. 희석성 증권 (CB/BW > 유증/감자)
+    5. 자기주식
+    6. 보수/퇴직금/스톡옵션 ("이사 보수" 등 — director_election보다 먼저)
+    7. 이사 선임/해임 (감사위원·보수 다 거른 후)
+    8. 정관변경 (명시 + 정관 부속 안건 키워드)
+    9. 배당
+    10. 재무제표
     """
-    text = f"{agenda_type_raw} {agenda_title}".lower()
     text_ko = f"{agenda_type_raw} {agenda_title}"
+    text_lower = text_ko.lower()
 
-    if "감사위원" in text_ko and ("선임" in text_ko or "해임" in text_ko):
-        return "audit_committee_election"
-    if any(k in text_ko for k in ["전환사채", "신주인수권부사채"]) or "cb" in text or "bw" in text:
-        return "cb_bw"
     if "주주제안" in text_ko:
         return "shareholder_proposal"
-    if any(k in text_ko for k in ["분할", "물적분할", "인적분할"]):
-        return "spin_off"
+
+    if "감사위원" in text_ko:
+        if "분리선출" in text_ko or "분리 선출" in text_ko:
+            return "articles_amendment"
+        if "선임" in text_ko or "해임" in text_ko or "후보" in text_ko:
+            return "audit_committee_election"
+        return "audit_committee_election"
+
     if "합병" in text_ko:
         return "merger"
+    if any(k in text_ko for k in ["물적분할", "인적분할", "분할합병"]):
+        return "spin_off"
+    if "분할" in text_ko and "분리선출" not in text_ko:
+        return "spin_off"
+
+    if any(k in text_ko for k in ["전환사채", "신주인수권부사채"]) or "cb" in text_lower or "bw" in text_lower:
+        return "cb_bw"
+    if any(k in text_ko for k in ["유상증자", "무상증자", "신주발행", "주식분할", "주식병합", "액면분할", "액면병합"]):
+        return "capital_increase_decrease"
+
     if any(k in text_ko for k in ["자기주식", "자사주", "자본감소", "감자"]):
         return "treasury_share"
-    if "유상증자" in text_ko or "신주발행" in text_ko or "무상증자" in text_ko:
-        return "capital_increase_decrease"
+
+    # 보수·퇴직금·스톡옵션 (이사 선임보다 먼저)
+    if any(k in text_ko for k in [
+        "보수한도", "보수승인", "보수액", "이사 보수", "감사 보수", "임원 보수", "임원보수",
+        "퇴직금", "퇴직위로금", "퇴직금규정", "퇴직금 지급", "퇴직급여",
+        "주식매수선택권", "스톡옵션", "성과급여", "성과급",
+    ]):
+        return "director_compensation"
+
     if "이사" in text_ko and ("선임" in text_ko or "해임" in text_ko):
         return "director_election"
-    if any(k in text_ko for k in ["이사 보수", "감사 보수", "임원 보수", "보수한도"]):
-        return "director_compensation"
-    if "정관" in text_ko:
+
+    # 정관변경 (명시 + 부속 안건 키워드)
+    articles_keywords = [
+        "정관",
+        "사업목적", "목적사업", "회사명", "상호 변경", "상호변경",
+        "본점", "본사 소재", "본점이전",
+        "회계연도",
+        "전자주주총회", "전자투표", "서면투표",
+        "주주총회 소집", "주주총회의 소집", "주주총회 결의",
+        "의결권 대리",
+        "이사회 규모", "이사회 내 위원회", "이사회 의장", "사외이사 비중",
+        "시차임기제", "황금낙하산", "독약처방",
+        "사외이사 명칭",
+        "집중투표 규정", "집중투표제 도입", "집중투표제 배제",
+    ]
+    if any(k in text_ko for k in articles_keywords):
         return "articles_amendment"
+
     if "배당" in text_ko and "주식배당" not in text_ko:
         return "cash_dividend"
     if any(k in text_ko for k in ["재무제표", "결산", "이익잉여금"]):
