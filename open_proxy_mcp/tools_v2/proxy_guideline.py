@@ -299,6 +299,62 @@ def _render_predict(data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _render_nps_record(data: dict[str, Any]) -> str:
+    f = data.get("filters", {})
+    rows = data.get("matched_rows", [])
+    details = data.get("details", [])
+    lines = ["# 국민연금 의결권 행사내역", ""]
+    lines.append(f"- 회사: `{f.get('company') or '-'}` (ticker `{f.get('ticker') or '-'}`, NPS `{f.get('nps_code') or '-'}`)")
+    lines.append(f"- 기간: {f.get('start_date', '?')} ~ {f.get('end_date', '?')} (year `{f.get('year', '?')}`)")
+    lines.append(f"- list source: `{data.get('list_source', '?')}` (전체 {data.get('list_total_in_window', 0)}건 중 매칭 **{data.get('matched_count', 0)}건**)")
+    lines.append("")
+
+    if rows:
+        lines.append("## 매칭 주총")
+        lines.append("| 회사 | NPS | ticker | 일자 | 구분 |")
+        lines.append("|---|---|---|---|---|")
+        for r in rows[:20]:
+            lines.append(
+                f"| {r.get('company_name', '')} | `{r.get('nps_code', '')}` | "
+                f"`{r.get('ticker', '')}` | {r.get('gmos_date', '')} | {r.get('gmos_kind_label', '')} |"
+            )
+        if len(rows) > 20:
+            lines.append(f"\n_... +{len(rows) - 20}건 (필터 좁히면 더 정확)_")
+        lines.append("")
+
+    if details:
+        lines.append(f"## 안건별 의결권 (상세 {len(details)}건)")
+        for d in details:
+            company = d.get("company_name", "?")
+            gmos = d.get("gmos_date", d.get("gmos_ymd", ""))
+            kind = d.get("gmos_kind", d.get("gmos_kind_cd", ""))
+            summary = d.get("summary", {})
+            lines.append(
+                f"\n### {company} — {gmos} ({kind}) — "
+                f"총 {summary.get('total', 0)} / 찬성 {summary.get('for', 0)} / 반대 {summary.get('against', 0)} / 기권 {summary.get('abstain', 0)}"
+            )
+            lines.append("| 의안번호 | 의안내용 | 행사 | 반대시 사유 | 근거조항 |")
+            lines.append("|---|---|---|---|---|")
+            for it in d.get("items", []):
+                title = (it.get("agenda_title", "") or "")[:60]
+                reason = (it.get("against_reason", "") or "")[:80]
+                clause = (it.get("rule_clause", "") or "")[:30]
+                lines.append(
+                    f"| {it.get('agenda_no', '')} | {title} | **{it.get('decision_label', '')}** "
+                    f"| {reason} | {clause} |"
+                )
+
+    if data.get("detail_errors"):
+        lines.append(f"\n## detail 오류 ({len(data['detail_errors'])}건)")
+        for e in data["detail_errors"][:5]:
+            lines.append(f"- {e}")
+
+    note = data.get("ticker_mapping_note")
+    if note:
+        lines.append(f"\n_매핑: {note}_")
+    return "\n".join(lines)
+
+
 def _render(payload: dict[str, Any]) -> str:
     data = payload.get("data", {})
     scope = data.get("scope", "")
@@ -314,6 +370,8 @@ def _render(payload: dict[str, Any]) -> str:
         return _render_audit(data)
     if scope == "predict":
         return _render_predict(data)
+    if scope == "nps_record":
+        return _render_nps_record(data)
     return _render_error(payload)
 
 
@@ -325,18 +383,25 @@ def register_tools(mcp):
         policy_id: str = "open_proxy",
         manager: str = "",
         company: str = "",
+        ticker: str = "",
+        nps_code: str = "",
         year: int = 0,
         period: str = "",
+        start_date: str = "",
+        end_date: str = "",
         agenda_category: str = "",
         agenda_title: str = "",
         agenda_type_raw: str = "",
         compare_policies: list[str] | None = None,
         topic_id: str = "",
+        fetch_detail: bool = True,
+        force_refresh: bool = False,
+        max_details: int = 5,
         format: str = "md",
     ) -> str:
-        """desc: 자산운용사 의결권 행사 정책 + 행사내역 + Open Proxy Guideline + 12 카테고리 매트릭스 통합 조회. 7 운용사 (mirae_asset/samsung/samsung_active/truston/kim/align_partners/baring) 정책+행사내역 + OPM 자체 모범 정책 (open_proxy). 베어링은 ISS Korea 글로벌 표준 직접 채택. 얼라인은 행동주의 펀드.
-        when: 운용사 정책 비교, 특정 회사 행사내역 조회, OPM Guideline 안건 적용, 합의/이견 분석, 정책 vs 실제 갭 audit. prepare_vote_before_meeting의 vote_style 옵션 백엔드.
-        rule: DART API 호출 0회 (정적 데이터). 모든 결정에 출처 명시. 정책에 없는 입장 만들지 않음. predict scope는 매트릭스 자동 채점 input 받으면 점수 산출 (완전 채점은 prepare_vote_before_meeting에서).
+        """desc: 자산운용사 의결권 행사 정책 + 행사내역 + Open Proxy Guideline + 12 카테고리 매트릭스 + 국민연금(NPS) 통합 조회. 7 운용사 (mirae_asset/samsung/samsung_active/truston/kim/align_partners/baring) 정책+행사내역 + OPM 자체 모범 정책 (open_proxy) + 국민연금(fund.nps.or.kr 직접 크롤링). 베어링은 ISS Korea 글로벌 표준 직접 채택. 얼라인은 행동주의 펀드.
+        when: 운용사 정책 비교, 특정 회사 행사내역 조회, OPM Guideline 안건 적용, 합의/이견 분석, 정책 vs 실제 갭 audit, 국민연금 안건별 의결권 행사내역 조회 (캠페인 표 예측 핵심 변수). prepare_vote_before_meeting의 vote_style 옵션 백엔드.
+        rule: DART API 호출 0회 (정적 데이터, NPS는 fund.nps.or.kr 크롤링). 모든 결정에 출처 명시. 정책에 없는 입장 만들지 않음. predict scope는 매트릭스 자동 채점 input 받으면 점수 산출. NPS는 정적 캐시 우선 + 최근 30일 안 주총만 실시간 호출.
         scopes:
           - policy: 정책 조회. policy_id 지정 (default open_proxy). agenda_category로 단일 카테고리 상세.
           - record: 운용사 행사내역. manager 필수 + company/year/period/category 필터.
@@ -344,20 +409,28 @@ def register_tools(mcp):
           - compare: N개 정책 비교. compare_policies 리스트 (default 모든 운용사 + open_proxy).
           - consensus: 운용사 합의/이견 분석. agenda_category + topic_id 필터.
           - audit: 정책 vs 실제 행사내역 갭. manager 필수.
-        ref: open-proxy-guideline, decision-matrix-design, voting-policy-consensus-matrix
+          - nps_record: 국민연금 의결권 행사내역. company / ticker / nps_code 중 1개 + year (default 올해). NPS 코드 5자리 + '0' = 표준 6자리 티커.
+        ref: open-proxy-guideline, decision-matrix-design, voting-policy-consensus-matrix, nps-voting-disclosure
         """
         payload = await build_proxy_guideline_payload(
             scope=scope,
             policy_id=policy_id,
             manager=manager,
             company=company,
+            ticker=ticker,
+            nps_code=nps_code,
             year=year,
             period=period,
+            start_date=start_date,
+            end_date=end_date,
             agenda_category=agenda_category,
             agenda_title=agenda_title,
             agenda_type_raw=agenda_type_raw,
             compare_policies=compare_policies or [],
             topic_id=topic_id,
+            fetch_detail=fetch_detail,
+            force_refresh=force_refresh,
+            max_details=max_details,
         )
         if format == "json":
             return as_pretty_json(payload)
