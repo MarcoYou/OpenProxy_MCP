@@ -986,7 +986,7 @@
             "red_0": "<30%"
           },
           "data_source": [
-            "total_shareholder_return"
+            "cash_shareholder_return"
           ],
           "law_basis": "MSCI Korea, OECD Principles"
         },

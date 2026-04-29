@@ -264,38 +264,108 @@ def _render_predict(data: dict[str, Any]) -> str:
     lines.append(f"- 분류: **{data.get('agenda_category_ko', '?')}** (`{data.get('agenda_category', '?')}`)")
     lines.append(f"- 정책: `{data.get('policy_id', '?')}`")
     lines.append(f"- 정책 default: `{data.get('policy_default', '?')}`")
+    if data.get("auto_score_enabled"):
+        lines.append("- 자동 채점: ENABLED")
     lines.append("")
 
+    # 자동 채점 결정 (먼저 표시)
+    auto_decision = data.get("auto_decision")
+    if auto_decision:
+        decision = auto_decision.get("decision", "?")
+        emoji = {"for": "[FOR]", "against": "[AGAINST]", "review": "[REVIEW]"}.get(decision, "[?]")
+        lines.append(f"## OPM 자동 결정: **{emoji} {decision.upper()}**")
+        lines.append(f"- 결정 근거: `{auto_decision.get('decision_source', '?')}`")
+        lines.append(
+            f"- 점수: {auto_decision.get('raw_score', 0)} / {auto_decision.get('max_score', 16)} "
+            f"(red {auto_decision.get('red_count', 0)} / yellow {auto_decision.get('yellow_count', 0)} "
+            f"/ green {auto_decision.get('green_count', 0)} / unknown {auto_decision.get('unknown_count', 0)})"
+        )
+        triggered = auto_decision.get("triggered_pattern_ids", [])
+        if triggered:
+            lines.append(f"- 트리거 빙고: `{', '.join(triggered)}`")
+        lines.append("")
+
+    bingo_matches = data.get("bingo_matches", [])
+    if bingo_matches:
+        lines.append(f"## 매칭된 빙고 패턴 ({len(bingo_matches)})")
+        for b in bingo_matches[:5]:
+            lines.append(
+                f"- **{b.get('pattern_id', '')}** → `{b.get('decision', '?')}` — "
+                f"{b.get('rationale', '')[:100]}"
+            )
+            lines.append(f"  - condition: `{b.get('condition', '')[:100]}`")
+        lines.append("")
+
+    # 자동 채점 dim 결과
+    matrix_score = data.get("matrix_score")
+    if matrix_score:
+        scored = matrix_score.get("dimensions_scored", {})
+        if scored:
+            lines.append("## Dim 채점 결과")
+            lines.append("| dim_id | 점수 | 상태 |")
+            lines.append("|---|---|---|")
+            for dim_id, score in scored.items():
+                if score is None:
+                    label = "데이터 부족"
+                elif score == 0:
+                    label = "RED (0)"
+                elif score == 1:
+                    label = "YELLOW (1)"
+                elif score == 2:
+                    label = "GREEN (2)"
+                else:
+                    label = str(score)
+                score_str = "-" if score is None else str(score)
+                lines.append(f"| `{dim_id}` | {score_str} | {label} |")
+            lines.append("")
+
+    # data tool 호출 결과
+    data_calls = data.get("data_calls", {})
+    if data_calls:
+        lines.append("## Data tool 호출 결과")
+        for tool, status in data_calls.items():
+            lines.append(f"- `{tool}`: `{status}`")
+        lines.append("")
+
+    # manual dim 안내
+    manual_dims = data.get("manual_dims", [])
+    if manual_dims:
+        lines.append(f"## Manual 입력 권장 dim ({len(manual_dims)})")
+        lines.append("자동 채점 불가 — `matrix_dimensions={\"dim_id\": 0|1|2}` 형태로 사용자 입력 권장:")
+        for dim in manual_dims:
+            lines.append(f"- `{dim}`")
+        lines.append("")
+
+    # 정책 룰
     for key, label in [("policy_for", "찬성 기준"), ("policy_against", "반대 기준"), ("policy_review", "검토 기준")]:
         items = data.get(key, [])
         if items:
-            lines.append(f"## {label} ({len(items)})")
+            lines.append(f"## 정책: {label} ({len(items)})")
             for item in items[:5]:
                 lines.append(f"- {item.get('criterion', '')[:120]}")
             lines.append("")
 
     matrix = data.get("matrix")
     if matrix:
-        lines.append(f"## 매트릭스 (`{data.get('matrix_id', '?')}`)")
+        lines.append(f"## 매트릭스 정의 (`{data.get('matrix_id', '?')}`)")
         lines.append(f"- dimensions: {len(matrix.get('dimensions', []))} 차원")
         lines.append(f"- bingo patterns: {len(matrix.get('bingo_patterns', []))} 패턴")
         thresholds = matrix.get("scoring", {}).get("thresholds", {})
         if thresholds:
             lines.append(f"- 임계값: for `{thresholds.get('for', '')}` / review `{thresholds.get('review', '')}` / against `{thresholds.get('against', '')}`")
-        lines.append("\n### Dimensions")
-        for d in matrix.get("dimensions", []):
-            lines.append(f"- **{d.get('label', d.get('dim_id', ''))}** (`{d.get('dim_id', '')}`)")
-        lines.append("\n### Bingo Patterns")
-        for p in matrix.get("bingo_patterns", [])[:5]:
-            lines.append(f"- **{p.get('pattern_id', '')}** → `{p.get('decision', '?')}` — {p.get('rationale', '')[:80]}")
 
-    if data.get("matrix_score"):
-        score = data["matrix_score"]
-        lines.append("\n## 매트릭스 채점 결과")
-        lines.append(f"- 점수: {score.get('raw_score', 0)} / {score.get('max_score', 16)}")
-        lines.append(f"- dim 채점: {score.get('dimensions_scored', {})}")
+    if data.get("warnings"):
+        lines.append("\n## Warnings")
+        for w in data["warnings"][:8]:
+            lines.append(f"- {w}")
 
-    lines.append(f"\n*{data.get('evaluation_note', '')}*")
+    disclaimer = data.get("disclaimer")
+    if disclaimer:
+        lines.append(f"\n_{disclaimer}_")
+
+    note = data.get("evaluation_note")
+    if note:
+        lines.append(f"\n*{note}*")
     return "\n".join(lines)
 
 
@@ -394,23 +464,28 @@ def register_tools(mcp):
         agenda_type_raw: str = "",
         compare_policies: list[str] | None = None,
         topic_id: str = "",
+        matrix_dimensions: dict[str, int] | None = None,
+        auto_score: bool = True,
+        meeting_date: str = "",
+        notice_disclosure_date: str = "",
+        extra_agenda_titles: list[str] | None = None,
         fetch_detail: bool = True,
         force_refresh: bool = False,
         max_details: int = 5,
         format: str = "md",
     ) -> str:
-        """desc: 자산운용사 의결권 행사 정책 + 행사내역 + Open Proxy Guideline + 12 카테고리 매트릭스 + 국민연금(NPS) 통합 조회. 7 운용사 (mirae_asset/samsung/samsung_active/truston/kim/align_partners/baring) 정책+행사내역 + OPM 자체 모범 정책 (open_proxy) + 국민연금(fund.nps.or.kr 직접 크롤링). 베어링은 ISS Korea 글로벌 표준 직접 채택. 얼라인은 행동주의 펀드.
-        when: 운용사 정책 비교, 특정 회사 행사내역 조회, OPM Guideline 안건 적용, 합의/이견 분석, 정책 vs 실제 갭 audit, 국민연금 안건별 의결권 행사내역 조회 (캠페인 표 예측 핵심 변수). prepare_vote_before_meeting의 vote_style 옵션 백엔드.
-        rule: DART API 호출 0회 (정적 데이터, NPS는 fund.nps.or.kr 크롤링). 모든 결정에 출처 명시. 정책에 없는 입장 만들지 않음. predict scope는 매트릭스 자동 채점 input 받으면 점수 산출. NPS는 정적 캐시 우선 + 최근 30일 안 주총만 실시간 호출.
+        """desc: 자산운용사 의결권 행사 정책 + 행사내역 + Open Proxy Guideline + 12 카테고리 매트릭스 자동 채점 + 국민연금(NPS) 통합 조회. 7 운용사 (mirae_asset/samsung/samsung_active/truston/kim/align_partners/baring) 정책+행사내역 + OPM 자체 모범 정책 (open_proxy) + 국민연금(fund.nps.or.kr 직접 크롤링). predict scope는 12 매트릭스 100 dim 중 ~85 dim 자동 채점 + 빙고 패턴 평가 → for/against/review 자동 결정. 베어링은 ISS Korea 글로벌 표준 직접 채택. 얼라인은 행동주의 펀드.
+        when: 운용사 정책 비교, 특정 회사 행사내역 조회, OPM Guideline 안건 적용 (auto_score=True 시 회사 데이터 자동 호출), 합의/이견 분석, 정책 vs 실제 갭 audit, 국민연금 안건별 의결권 행사내역 조회 (캠페인 표 예측 핵심 변수). prepare_vote_before_meeting의 vote_style 옵션 백엔드.
+        rule: DART API 호출 0회 (정적 데이터, NPS는 fund.nps.or.kr 크롤링). predict의 auto_score=True는 추가 data tool 호출 (board, corp_gov, ownership 등). 매트릭스 채점 오류 시 conservative review로 fallback. manual dim (adverse_news 등) 명시적 표시.
         scopes:
           - policy: 정책 조회. policy_id 지정 (default open_proxy). agenda_category로 단일 카테고리 상세.
           - record: 운용사 행사내역. manager 필수 + company/year/period/category 필터.
-          - predict: 회사·안건 → 정책 적용 예측. 매트릭스 dim 점수 받으면 채점.
+          - predict: 회사·안건 → 정책 적용 예측 + 매트릭스 자동 채점. auto_score=True (기본) 시 ~85 dim 자동 + 빙고 평가. matrix_dimensions로 manual override.
           - compare: N개 정책 비교. compare_policies 리스트 (default 모든 운용사 + open_proxy).
           - consensus: 운용사 합의/이견 분석. agenda_category + topic_id 필터.
           - audit: 정책 vs 실제 행사내역 갭. manager 필수.
           - nps_record: 국민연금 의결권 행사내역. company / ticker / nps_code 중 1개 + year (default 올해). NPS 코드 5자리 + '0' = 표준 6자리 티커.
-        ref: open-proxy-guideline, decision-matrix-design, voting-policy-consensus-matrix, nps-voting-disclosure
+        ref: open-proxy-guideline, decision-matrix-design, matrix-auto-scoring-2026-04-29, voting-policy-consensus-matrix, nps-voting-disclosure
         """
         payload = await build_proxy_guideline_payload(
             scope=scope,
@@ -428,6 +503,11 @@ def register_tools(mcp):
             agenda_type_raw=agenda_type_raw,
             compare_policies=compare_policies or [],
             topic_id=topic_id,
+            matrix_dimensions=matrix_dimensions,
+            auto_score=auto_score,
+            meeting_date=meeting_date,
+            notice_disclosure_date=notice_disclosure_date,
+            extra_agenda_titles=extra_agenda_titles,
             fetch_detail=fetch_detail,
             force_refresh=force_refresh,
             max_details=max_details,

@@ -530,58 +530,136 @@ def scope_audit(manager: str, agenda_category: str = "") -> dict[str, Any]:
 # ── Scope: predict ──
 
 
-def scope_predict(
+async def scope_predict(
     company: str,
     agenda_title: str,
     agenda_type_raw: str = "",
     policy_id: str = "open_proxy",
     matrix_dimensions: dict[str, int] | None = None,
+    auto_score: bool = True,
+    meeting_date: str = "",
+    notice_disclosure_date: str = "",
+    extra_agenda_titles: list[str] | None = None,
 ) -> dict[str, Any]:
-    """회사·안건 → 정책 적용 예측 (간단 버전).
+    """회사·안건 → 정책 적용 예측 + 매트릭스 자동 채점 (v1.3, 2026-04-29).
 
-    안건명에서 카테고리 자동 분류 → 해당 정책 룰 + 매트릭스 표시.
-    matrix_dimensions가 제공되면 매트릭스 채점 + 빙고 패턴 매칭.
+    auto_score=True (기본): data tool 자동 호출 → ~85+ dim 채점 → 빙고 평가 → for/against/review 자동 결정.
+    matrix_dimensions: 사용자 override (manual dim 입력 또는 자동 채점 보정).
 
-    완전한 예측은 prepare_vote_before_meeting에서 다른 data tool과 결합 필요.
-    여기서는 정책 룰 + 매트릭스 구조만 제공.
+    안전망:
+      - 데이터 부족 dim은 None → conservative 빙고 skip
+      - 채점 불가 카테고리 (other) → review fallback
+      - manual dim (adverse_news 등)은 명시적 표시 + 사용자 input 권유.
     """
     pol = load_policy(policy_id)
     if not pol:
         return {"status": "error", "warning": f"정책 미발견: {policy_id}"}
 
     matrices = load_decision_matrices()
-
     cat = classify_agenda(agenda_title, agenda_type_raw)
     rule = pol.get("voting_rules", {}).get(cat, {})
     matrix_id = rule.get("matrix_id") or f"matrix_{cat}"
     matrix = matrices.get("matrices", {}).get(matrix_id, {})
 
-    # 매트릭스 채점 (dim 점수 제공된 경우)
-    matrix_score = None
-    bingo_match = None
-    if matrix_dimensions and matrix:
-        dims = matrix.get("dimensions", [])
-        scored = {}
-        for d in dims:
-            dim_id = d.get("dim_id")
-            if dim_id in matrix_dimensions:
-                scored[dim_id] = matrix_dimensions[dim_id]
-        raw_score = sum(scored.values())
-        max_score = matrix.get("scoring", {}).get("max_score", 16)
+    # ── 자동 채점 ──
+    matrix_score: dict[str, Any] | None = None
+    auto_decision: dict[str, Any] | None = None
+    bingo_matches: list[dict[str, Any]] = []
+    auto_warnings: list[str] = []
+    data_calls: dict[str, str] = {}
+    manual_dims: list[str] = []
+    auto_dims: list[str] = []
 
-        # 빙고 패턴 매칭 (간단 buffer)
-        for pattern in matrix.get("bingo_patterns", []):
-            cond = pattern.get("condition", "")
-            # 패턴 매칭은 문자열 기반 simple — 실제 평가 로직은 별도 인터프리터 필요
-            # 일단 패턴 후보 모두 노출
-            pass
+    final_scores: dict[str, int | None] = {}
 
-        matrix_score = {
-            "dimensions_scored": scored,
-            "raw_score": raw_score,
-            "max_score": max_score,
-            "thresholds": matrix.get("scoring", {}).get("thresholds", {}),
-        }
+    if auto_score and matrix and cat != "other":
+        try:
+            from open_proxy_mcp.services.proxy_guideline_scoring import (
+                aggregate_score_to_decision,
+                auto_score_matrix,
+                evaluate_all_bingo_patterns,
+                manual_dims_for_category,
+            )
+
+            agenda_titles_for_score = [agenda_title] + list(extra_agenda_titles or [])
+            score_result = await auto_score_matrix(
+                company,
+                cat,
+                agenda_titles=agenda_titles_for_score,
+                user_dimensions=matrix_dimensions,
+                meeting_date=meeting_date,
+                notice_disclosure_date=notice_disclosure_date,
+            )
+            final_scores = score_result.get("scores", {}) or {}
+            data_calls = score_result.get("data_calls", {}) or {}
+            auto_warnings = score_result.get("warnings", []) or []
+            manual_dims = score_result.get("manual_dims", []) or []
+            auto_dims = score_result.get("auto_dims", []) or []
+
+            # 빙고 평가
+            valid_for_bingo = {k: v for k, v in final_scores.items() if v is not None}
+            bingo_matches = evaluate_all_bingo_patterns(
+                matrix,
+                valid_for_bingo,
+                agenda_date=meeting_date or None,
+                agenda_category=cat,
+            )
+            auto_decision = aggregate_score_to_decision(final_scores, matrix, bingo_matches)
+
+            matrix_score = {
+                "dimensions_scored": final_scores,
+                "raw_score": auto_decision.get("raw_score"),
+                "max_score": auto_decision.get("max_score"),
+                "red_count": auto_decision.get("red_count"),
+                "yellow_count": auto_decision.get("yellow_count"),
+                "green_count": auto_decision.get("green_count"),
+                "unknown_count": auto_decision.get("unknown_count"),
+                "thresholds": matrix.get("scoring", {}).get("thresholds", {}),
+                "scored_dim_count": auto_decision.get("scored_dim_count"),
+                "total_dim_count": auto_decision.get("total_dim_count"),
+            }
+        except Exception as e:
+            auto_warnings.append(f"자동 채점 오류: {type(e).__name__}: {str(e)[:200]}")
+            logger.exception("auto_score_matrix 실패: %s", e)
+
+    elif matrix_dimensions and matrix:
+        # 사용자 input만 사용 (auto_score=False 또는 fallback)
+        try:
+            from open_proxy_mcp.services.proxy_guideline_scoring import (
+                aggregate_score_to_decision,
+                evaluate_all_bingo_patterns,
+            )
+
+            dims = matrix.get("dimensions", [])
+            for d in dims:
+                dim_id = d.get("dim_id")
+                if dim_id in matrix_dimensions:
+                    final_scores[dim_id] = matrix_dimensions[dim_id]
+                else:
+                    final_scores[dim_id] = None
+
+            valid_for_bingo = {k: v for k, v in final_scores.items() if v is not None}
+            bingo_matches = evaluate_all_bingo_patterns(
+                matrix,
+                valid_for_bingo,
+                agenda_date=meeting_date or None,
+                agenda_category=cat,
+            )
+            auto_decision = aggregate_score_to_decision(final_scores, matrix, bingo_matches)
+            matrix_score = {
+                "dimensions_scored": final_scores,
+                "raw_score": auto_decision.get("raw_score"),
+                "max_score": auto_decision.get("max_score"),
+                "red_count": auto_decision.get("red_count"),
+                "yellow_count": auto_decision.get("yellow_count"),
+                "green_count": auto_decision.get("green_count"),
+                "unknown_count": auto_decision.get("unknown_count"),
+                "thresholds": matrix.get("scoring", {}).get("thresholds", {}),
+                "scored_dim_count": auto_decision.get("scored_dim_count"),
+                "total_dim_count": auto_decision.get("total_dim_count"),
+            }
+        except Exception as e:
+            auto_warnings.append(f"매뉴얼 채점 오류: {type(e).__name__}: {str(e)[:200]}")
 
     return {
         "status": "exact",
@@ -601,7 +679,19 @@ def scope_predict(
             "bingo_patterns": matrix.get("bingo_patterns", []),
         } if matrix else None,
         "matrix_score": matrix_score,
-        "evaluation_note": "완전한 예측은 prepare_vote_before_meeting에서 회사 상태 + 매트릭스 dim 자동 채점 필요",
+        "auto_decision": auto_decision,
+        "bingo_matches": bingo_matches,
+        "auto_score_enabled": auto_score,
+        "data_calls": data_calls,
+        "manual_dims": manual_dims,
+        "auto_dims": auto_dims,
+        "warnings": auto_warnings,
+        "disclaimer": "자동 채점 결과는 참고용. 최종 판단은 사용자가 검토 후 결정. 데이터 부족 dim은 manual input으로 보정 가능.",
+        "evaluation_note": (
+            "자동 채점 활성화 — data tool 호출 + 빙고 평가 통합."
+            if auto_score
+            else "정책 룰 + 매트릭스 구조만 표시. matrix_dimensions로 사용자 채점 가능."
+        ),
     }
 
 
@@ -919,6 +1009,10 @@ async def build_proxy_guideline_payload(
     compare_policies: list[str] | None = None,
     topic_id: str = "",
     matrix_dimensions: dict[str, int] | None = None,
+    auto_score: bool = True,
+    meeting_date: str = "",
+    notice_disclosure_date: str = "",
+    extra_agenda_titles: list[str] | None = None,
     fetch_detail: bool = True,
     force_refresh: bool = False,
     max_details: int = 5,
@@ -945,7 +1039,17 @@ async def build_proxy_guideline_payload(
         elif scope == "audit":
             data = scope_audit(manager, agenda_category)
         elif scope == "predict":
-            data = scope_predict(company, agenda_title, agenda_type_raw, policy_id, matrix_dimensions)
+            data = await scope_predict(
+                company,
+                agenda_title,
+                agenda_type_raw=agenda_type_raw,
+                policy_id=policy_id,
+                matrix_dimensions=matrix_dimensions,
+                auto_score=auto_score,
+                meeting_date=meeting_date,
+                notice_disclosure_date=notice_disclosure_date,
+                extra_agenda_titles=extra_agenda_titles,
+            )
         elif scope == "nps_record":
             data = await scope_nps_record(
                 company=company,
