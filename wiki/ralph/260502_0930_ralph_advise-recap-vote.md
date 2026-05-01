@@ -1,0 +1,196 @@
+---
+type: ralph
+title: action tool 재편 — advise_vote_before_meeting + recap_vote_after_meeting
+created: 2026-05-02 09:30
+completion_promise: ADVISE_RECAP_VOTE_DONE
+max_iterations: 25
+---
+
+# action tool 재편 ralph
+
+기존 3개 action tool (`prepare_vote_brief` / `build_campaign_brief` / `prepare_engagement_case`)을 시점 기반 2개 (`advise_vote_before_meeting` / `recap_vote_after_meeting`)로 재편.
+
+**핵심**: 운용사 의결권 행사 보고서 스타일. 안건마다 행사방향 + 사유. **gap 비교 X, 검증 가능한 fact + 정책 근거만**.
+
+---
+
+## 매 iteration 작업
+
+1. **현황 확인**: `git status` + 가이드 체크리스트 대조
+2. **다음 1 step만 진행** (검증 가능 단위로 작게 쪼갬)
+3. **데이터 매핑 검증** — 모든 upstream upstream 매핑마다 success/soft-fail/hard-fail 명시
+4. **sanity test** (정기주총 + 임시주총 모두)
+5. **self-critique**: 성공 기준 vs 현재 갭 / 가짜 데이터 risk / 회귀 가능성
+6. **commit** (의미 있는 변경마다, 커밋 메시지에 step 명시)
+7. 다음 iteration 계획 1줄
+
+---
+
+## 데이터 매핑 분류 (필수 — 모든 항목)
+
+### success (그대로 사용)
+정형 필드로 깔끔하게 추출됨. 코드가 정확히 매핑하고 메모/render에 그대로 쓸 수 있음.
+- 예: 주총 일시 / 안건 리스트 / 지분율 / 매출 / ROE / 감사의견 / 후보 이름 / 임기
+
+### soft-fail (raw 통째로 LLM에게)
+정형 필드는 없지만 **raw text 또는 unstructured data가 존재**. OPM 코드는 매핑 실패 → LLM에게 raw payload를 그대로 노출해서 이해·답변하게 함.
+- 예: 후보 약력 텍스트 (과거 회사 추출 실패 시) / 안건 본문 디테일 / 임원 추천 사유 / 정관 조문 변경 사항
+- 처리 방식: payload에 `raw_text` 또는 `unstructured` 필드로 노출 + render에서 "참고: 아래 원문을 기반으로 판단" 명시
+
+### hard-fail (데이터 자체 없음)
+데이터 출처 자체에 정보가 없음. **메모에 표시하지 않음** (코붕이 지시: "자동 검증 안 된 건 안된거니까 표시하지 말고").
+- 예: 형사 처벌 이력 / 사적 관계 (학연 등) / 동명이인 정확 식별 / 파산 / 임원 자격 박탈
+- 처리 방식: 코드에서 침묵, 메모에서 언급 안 함
+
+**모든 신규 코드 매핑 라인마다 위 3-tier 중 어느 분류인지 주석 명시.**
+
+---
+
+## 성공 기준 (모두 충족 시 promise 출력)
+
+### 코드 — 신규
+- [ ] **`open_proxy_mcp/services/director_evaluation.py`** 신규 (Marco 후보 평가 모듈)
+  - [ ] personnel parser에서 후보 약력 텍스트 추출 (success로 분류)
+  - [ ] 약력에서 과거 회사명 정규식 추출 (성공 시 success / 실패 시 soft-fail로 raw 노출)
+  - [ ] 과거 회사 corp_code 매핑 + 재직 기간 추출
+  - [ ] 각 과거 회사 financial_metrics audit_opinion + yoy 호출
+  - [ ] 재직 기간 × 회계 risk 시점 overlap 체크 → red flag (success 시)
+  - [ ] 독립성 sub-factor 4개 매핑 (success): 최대주주 매칭 / 최근 2년 직원 / 5년 룰 / 회사와 거래
+  - [ ] 충실성 sub-factor 3개 매핑 (success): 출석률 / Marco overlap / 거버넌스 위반 추이
+  - [ ] 결격사유 sub-factor 1개 매핑 (success): 나이 (미성년만)
+- [ ] **`open_proxy_mcp/services/advise_vote.py`** 신규
+  - [ ] 6 upstream 통합 (shareholder_meeting + ownership_structure + corp_gov_report + financial_metrics + proxy_guideline + director_evaluation)
+  - [ ] 안건별 FOR/AGAINST/REVIEW 자동 결정 (proxy_guideline + 매트릭스 자동 채점)
+  - [ ] 안건별 **결정 사유** 1-2 문장 (정책 근거 + 사실 근거 + evidence rcept_no)
+  - [ ] meeting_type 자동 감지 (annual / extraordinary)
+- [ ] **`open_proxy_mcp/services/recap_vote.py`** 신규
+  - [ ] 5 upstream (shareholder_meeting results + proxy_contest + dividend/treasury_share/corporate_restructuring/dilutive_issuance + corp_gov_report 변화)
+  - [ ] 안건별 결과 (가결/부결/찬반율/출석률) + **OPM 정책상 행사 사유** (gap 비교 X)
+  - [ ] 주총 직후 30일 후속 공시 surface
+- [ ] **`open_proxy_mcp/tools_v2/advise_vote_before_meeting.py`** 신규 (register + render)
+  - [ ] 운용사 의결권 행사 메모 스타일 (회사명 / 주총일 / 안건별 표 — 안건 / 방향 / 사유 / rcept_no)
+- [ ] **`open_proxy_mcp/tools_v2/recap_vote_after_meeting.py`** 신규 (register + render)
+  - [ ] 운용사 분기 의결권 보고서 스타일
+
+### 코드 — 기존 제거
+- [ ] `open_proxy_mcp/tools_v2/prepare_vote_brief.py` 삭제 (advise에 로직 흡수 후)
+- [ ] `open_proxy_mcp/services/vote_brief.py` 삭제
+- [ ] `open_proxy_mcp/tools_v2/build_campaign_brief.py` 삭제 (timeline 로직 advise/recap에 분산)
+- [ ] `open_proxy_mcp/services/campaign_brief.py` 삭제
+- [ ] `open_proxy_mcp/tools_v2/prepare_engagement_case.py` → `tools_v2/_archive/` 이동 (FastMCP 자동 디스커버리 자연 제외)
+- [ ] `open_proxy_mcp/services/engagement_case.py` → `services/_archive/` 이동
+- [ ] FastMCP register_all_tools_v2 → 18 tool → 17 tool 자동 인식 확인
+
+### 매핑 검증 (필수 — 모든 항목 분류 명시)
+모든 upstream 데이터 매핑마다 success / soft-fail / hard-fail 분류:
+
+**advise_*에서 검증할 매핑** (예시 — 코드 작성하며 추가):
+- 안건 리스트 (shareholder_meeting → advise) → success
+- 후보 이름·임기·약력 (shareholder_meeting → director_evaluation) → success / soft-fail (약력 정규식 실패 시)
+- 후보의 최대주주 관계 (ownership_structure × 후보 이름 매칭) → success / soft-fail (이름 동일/유사 매칭 모호 시)
+- 후보 이사회 출석률 (corp_gov_report) → success
+- Marco 시나리오 과거 회사 (약력 → corp_code 매핑) → success / soft-fail (회사명 매핑 실패 시 raw 약력 노출)
+- 회사 재무 risk (financial_metrics summary + audit_opinion) → success
+- 정책 권고 (proxy_guideline + 12 매트릭스 채점) → success
+
+**recap_*에서 검증할 매핑** (예시):
+- 주총 결과 안건별 가결/부결/찬반율 (shareholder_meeting results) → success
+- 후속 공시 (dividend/treasury/restructuring/dilutive 4종) → success
+- 결정 사유 (proxy_guideline 정책) → success
+
+### Sanity Test (정기 + 임시 모두)
+- [ ] **정기주총 advise** (3 회사):
+  - 삼성전자 (대형 거버넌스 모범)
+  - KT&G (배당주 + 행동주의 이력)
+  - 한국타이어앤테크놀로지 (이사 보수 + 일감몰아주기 이력)
+- [ ] **임시주총 advise** (2 회사):
+  - 한진칼 (2024 KCGI 위임장 분쟁)
+  - 고려아연 (2025 영풍/MBK vs 최윤범 분쟁)
+- [ ] **정기주총 recap** (3 회사, 2024 또는 2025년 종료된 주총):
+  - 삼성전자 / KT&G / SK하이닉스
+- [ ] **임시주총 recap** (1-2 회사):
+  - 한진칼 / 고려아연 (위임장 결과 포함)
+
+### Regression 0
+- [ ] 14 data tool (financial_metrics 포함) 회귀 0 — 1 회사 spot-check (예: 삼성전자 dividend / corp_gov_report / financial_metrics 호출 → 변경 없음)
+- [ ] proxy_guideline 정적 데이터 영향 없음
+- [ ] 18 tool → 17 tool (3 제거 + 2 추가) 자동 디스커버리 확인
+
+### Wiki + 문서
+- [ ] `wiki/tools/advise_vote_before_meeting.md` 신규 (12 섹션 + Flow mermaid)
+- [ ] `wiki/tools/recap_vote_after_meeting.md` 신규 (12 섹션 + Flow mermaid)
+- [ ] `wiki/tools/prepare_vote_brief.md` → `archive/tools/`
+- [ ] `wiki/tools/build_campaign_brief.md` → `archive/tools/`
+- [ ] `wiki/tools/prepare_engagement_case.md` → `archive/tools/`
+- [ ] `wiki/architecture/audits/{yymmdd_hhmm}_audit_advise-recap-vote.md` (sanity 결과)
+- [ ] `wiki/index.md` (18 → 17 tool, action 3 → 2)
+- [ ] `wiki/tools/README.md` (action 3 → 2)
+- [ ] `README.md` + `README_ENG.md` (badge / Tool Structure / 도메인 표)
+- [ ] `CLAUDE.md` (action tool 설명)
+- [ ] `wiki/log.md` (재편 기록)
+
+---
+
+## 품질 강화
+
+- 자동 검증 안 된 항목 (hard-fail)은 메모에 **표시하지 않음** (코붕이 지시 명시).
+- 매핑 분류 (success/soft-fail/hard-fail)는 service 코드 주석 + audit 페이지에 표 형태로 정리.
+- 결정 사유는 정책 근거 + 사실 근거 둘 다 + evidence rcept_no 포함 (1-2 문장 압축).
+- 운용사 보고서 스타일 — 안건 / 방향 / 사유 / 근거 4컬럼 표 중심.
+- 가짜 데이터 절대 X — soft-fail은 raw text 그대로 노출, 추정/조작 X.
+- 명명 규칙:
+  - tool 페이지 = `advise_vote_before_meeting.md` / `recap_vote_after_meeting.md` (정체성)
+  - audit 페이지 = `260502_HHMM_audit_advise-recap-vote.md` (시점 prefix)
+
+---
+
+## 종료 조건
+
+### ✅ 모든 성공 기준 충족
+1. 위 모든 체크박스 ✅
+2. `git status` clean (모두 commit + push)
+3. fly.io 자동 배포 진행
+4. 마지막 commit 메시지에 action tool 재편 완료 명시
+5. **`<promise>ADVISE_RECAP_VOTE_DONE</promise>` 출력 → ralph 종료**
+
+### ⚠️ 막힘 발생 시
+- shareholder_meeting personnel parser가 임시주총 후보 못 추출 (정관 변경만 있는 케이스)
+- 후보 약력에서 과거 회사명 정규식 패턴 회사마다 너무 다양 → soft-fail 빈도 높음
+- 위임장 분쟁 케이스 (한진칼/고려아연) personnel/proxy_contest 파서 한계
+- regression 발생 (14 data tool 영향)
+- → **promise 출력 X**, 사용자에게 `## STATUS REPORT` 섹션으로 막힘 영역 + 결정 요청
+
+---
+
+## 반복 단위 (작은 step)
+
+좋은 1 iteration 단위 예시:
+- "director_evaluation.py 작성 + 후보 약력 success/soft-fail 분류 + 삼성전자 sanity"
+- "advise_vote.py 작성 + 안건별 FOR/AGAINST 추천 + KT&G sanity"
+- "Marco 시나리오 (과거 회사 × 재직 기간 overlap) + 한진칼 sanity"
+- "recap_vote.py 작성 + 후속 공시 surface + SK하이닉스 sanity"
+- "기존 3 tool 제거 + register_all_tools_v2 17 tool 확인"
+- "wiki tools/ 2 페이지 + archive 3 이동"
+- "README 17 tools 동기화 + audit 페이지"
+
+너무 큰 step (예: "전체 코드 + wiki 한 번에") 금지. 검증 가능한 단위로 쪼갬.
+
+---
+
+## 참고 — 기존 패턴
+
+- `services/dividend_v2.py` — 6 scope facade 패턴
+- `services/financial_metrics.py` — 신규 통합 + 매핑 + alerts (Phase 1 완료, 참고 가능)
+- `services/contracts.py` — `AnalysisStatus`, `build_usage`, `EvidenceRef`, `ToolEnvelope`
+- `services/vote_brief.py` (제거 예정) — upstream 통합 + auto_score_matrix 흡수 logic
+- `services/campaign_brief.py` (제거 예정) — timeline 흡수 logic
+- `services/engagement_case.py` (archive 예정) — engagement 흡수 logic (Phase 3 부활 시 참고)
+
+---
+
+## 명명 + frontmatter 규칙
+
+- tool 페이지: `tools/advise_vote_before_meeting.md` / `tools/recap_vote_after_meeting.md` (정체성)
+- audit 페이지: `architecture/audits/260502_HHMM_audit_advise-recap-vote.md`
+- 이 ralph 파일: `wiki/ralph/260502_0930_ralph_advise-recap-vote.md` (이미 정확)
+- 모든 신규 페이지 `created: 2026-05-02`
