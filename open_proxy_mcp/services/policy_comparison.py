@@ -194,13 +194,24 @@ def build_policy_comparison(
             if len(outliers) >= 3:
                 break
 
-        # our_alignment 판단
+        # our_alignment 판단 (ralph iter10/10b: 약한 majority + REVIEW + 분열 case 처리)
+        strength_pct = (most_count / total) if total else 0
+        is_weak = strength_pct < 0.70
+        is_split = strength_pct < 0.66  # 운용사 간 명확 분열
+        our_matches_outlier = bool(outliers and any(o["decision"] == our_decision for o in outliers))
+
         if not most_common:
             alignment = "no_data"
         elif our_decision == most_common:
             alignment = "follows_consensus"
-        elif outliers and any(o["decision"] == our_decision for o in outliers):
+        elif is_split and our_matches_outlier:
+            # 분열 case (66% 미만 majority): 우리 결정이 일부 운용사와 일치 → 정당
+            alignment = "weak_consensus_aligned"
+        elif our_matches_outlier:
             alignment = "aligns_with_outlier"
+        elif our_decision == "REVIEW" and is_weak:
+            # REVIEW는 records에 직접 매핑 X. 약한 majority (<70%) 시 보수 판단 정당.
+            alignment = "weak_consensus_review_ok"
         else:
             alignment = "unique"
 
