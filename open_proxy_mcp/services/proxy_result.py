@@ -34,6 +34,7 @@ from open_proxy_mcp.services.corp_gov_report import build_corp_gov_report_payloa
 from open_proxy_mcp.services.corporate_restructuring import build_corporate_restructuring_payload
 from open_proxy_mcp.services.dilutive_issuance import build_dilutive_issuance_payload
 from open_proxy_mcp.services.dividend_v2 import build_dividend_payload
+from open_proxy_mcp.services.ownership_structure import build_ownership_structure_payload
 from open_proxy_mcp.services.proxy_contest import build_proxy_contest_payload
 from open_proxy_mcp.services.shareholder_meeting import build_shareholder_meeting_payload
 from open_proxy_mcp.services.treasury_share import build_treasury_share_payload
@@ -226,27 +227,90 @@ async def build_proxy_result_payload(
     else:
         status = AnalysisStatus.EXACT
 
+    # ── data dict 구성 (Step 4e: scope 분기) ──
+    data: dict[str, Any] = {
+        "query": company_query,
+        "company_id": _company_id(selected),
+        "canonical_name": selected.get("corp_name"),
+        "year": target_year,
+        "meeting_type": meeting_type,
+        "vote_style": vote_style,
+        "scope": scope,
+        "meeting_date": meeting_date_str,
+        "agenda_results": agenda_results,
+        "agenda_results_count": n_decisions,
+        "follow_up_window": {"start": follow_start, "end": follow_end, "days": follow_up_days},
+        "followup_disclosures": followups,
+        "proxy_contest_summary": (proxy_contest.get("data") or {}).get("summary"),
+        "governance_summary": (gov_report.get("data") or {}).get("summary"),
+        **filing_meta,
+        "usage": build_usage(client.api_call_snapshot() - calls_start),
+    }
+
+    # Step 4e: brief scope — 분기 의결권 보고서 통합 render (vote_brief 흡수)
+    # 옛 prepare_vote_brief의 통합 view를 data dict로 노출. tools_v2 wrapper에서 markdown render.
+    if scope in ("brief", "all"):
+        try:
+            ownership_payload, agenda_payload, candidates_payload, compensation_payload = await asyncio.gather(
+                _safe_throttled(build_ownership_structure_payload, company_query, scope="control_map"),
+                _safe_throttled(build_shareholder_meeting_payload, company_query, scope="agenda", year=target_year, meeting_type=meeting_type),
+                _safe_throttled(build_shareholder_meeting_payload, company_query, scope="candidates", year=target_year, meeting_type=meeting_type),
+                _safe_throttled(build_shareholder_meeting_payload, company_query, scope="compensation", year=target_year, meeting_type=meeting_type),
+            )
+            ownership_data_dict = ownership_payload.get("data") or {}
+            control_map = ownership_data_dict.get("control_map") or {}
+            agenda_data = agenda_payload.get("data") or {}
+            candidates_data = candidates_payload.get("data") or {}
+            compensation_data = compensation_payload.get("data") or {}
+
+            # result 통계
+            passed = sum(1 for r in agenda_results if (r.get("outcome") or "").startswith("passed") or (r.get("passed") or "").strip() in {"가결","원안가결","수정가결"})
+            opposed_high = []
+            for r in agenda_results:
+                opp = r.get("opposition_rate") or r.get("against_pct")
+                try:
+                    if opp is not None and float(opp) >= 10:
+                        opposed_high.append({
+                            "agenda_title": r.get("agenda_title") or r.get("agenda"),
+                            "opposition_rate": float(opp),
+                        })
+                except (ValueError, TypeError):
+                    pass
+
+            data["brief"] = {
+                "company_id": _company_id(selected),
+                "canonical_name": selected.get("corp_name"),
+                "meeting_phase": "completed" if agenda_results else "pending",
+                "result_status": "passed_all" if (agenda_results and passed == len(agenda_results)) else ("partial" if passed else "no_results"),
+                "ownership_snapshot": {
+                    "top_holder": control_map.get("top_holder", {}),
+                    "related_total_pct": control_map.get("related_total_pct", 0.0),
+                    "treasury_pct": control_map.get("treasury_pct", 0.0),
+                    "active_external_blocks": [b.get("reporter") for b in (control_map.get("active_non_overlap_blocks") or [])],
+                    "active_overlap_blocks": [b.get("reporter") for b in (control_map.get("active_overlap_blocks") or [])],
+                },
+                "agenda_titles": [(a.get("title") or "") for a in (agenda_data.get("agendas") or [])][:15],
+                "agenda_count": len(agenda_data.get("agendas") or []),
+                "candidates_count": (candidates_data.get("board") or {}).get("candidate_count", 0),
+                "outside_director_count": (candidates_data.get("board") or {}).get("outside_director_count", 0),
+                "compensation_summary": compensation_data.get("summary"),
+                "result_summary": {
+                    "total_agendas": n_decisions,
+                    "passed": passed,
+                    "rejected": n_decisions - passed if n_decisions else 0,
+                    "opposed_high": opposed_high[:5],
+                },
+            }
+        except Exception as exc:
+            data["brief"] = {
+                "error": f"brief 구성 실패: {type(exc).__name__}: {exc}",
+            }
+
     return ToolEnvelope(
         tool="proxy_result_after_meeting",
         status=status,
         subject=selected.get("corp_name", company_query),
         warnings=[],
-        data={
-            "query": company_query,
-            "company_id": _company_id(selected),
-            "canonical_name": selected.get("corp_name"),
-            "year": target_year,
-            "meeting_type": meeting_type,
-            "vote_style": vote_style,
-            "meeting_date": meeting_date_str,
-            "agenda_results": agenda_results,  # success: 안건별 가결/부결/찬반율
-            "agenda_results_count": n_decisions,
-            "follow_up_window": {"start": follow_start, "end": follow_end, "days": follow_up_days},
-            "followup_disclosures": followups,
-            "proxy_contest_summary": (proxy_contest.get("data") or {}).get("summary"),
-            "governance_summary": (gov_report.get("data") or {}).get("summary"),
-            **filing_meta,
-            "usage": build_usage(client.api_call_snapshot() - calls_start),
-        },
+        data=data,
         evidence_refs=evidence,
     ).to_dict()
