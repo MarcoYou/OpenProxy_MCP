@@ -118,80 +118,88 @@ KOSPI 200 + KOSDAQ 50 (light — 30 회사 batch + spot)에서 각 Tier A 파서
 
 ## 작업 plan (20 iter, light 단위)
 
-### Phase 1 — Tier A 파서 audit (iter 1-7)
+### Phase 1 — Tier A 파서 통합 audit (iter 1-3, **rate-optimized**)
 
-#### iter 1. `parse_agenda_xml` audit
-- 30 회사 spot — 안건 트리 root_count + total_count 정확도
-- 안건 number 패턴 다양성 (제N호 의안 / 제N-N호 / etc.) 검증
-- summary scope에서 hierarchy 노출 정확도 spot
+**핵심**: 30 회사 spot 1회로 7 parser 모두 audit (master script). 7 batch → 1-2 batch로 압축.
 
-#### iter 2. `parse_agenda_details_xml` audit
-- 30 회사 spot — 안건 detail 추출률 (안건 내 sections + tables)
-- 표 head 패턴 다양성 (변경전/현행 등 — precision ralph에서 일부 강화 함)
+#### iter 1. Master spot script 작성 + 첫 batch (30 회사)
+- `scripts/spot_parser_omnibus.py` — 1 회사당 1 doc fetch + 7 parser 호출 + G1 metrics 일괄
+- 첫 30 회사 batch (KOSPI 0-30) — ~90 DART calls / cap 900 안전
+- 결과 JSON: `wiki/architecture/audits/data/260505_parser_omnibus/iter01_kospi_0-30.json`
 
-#### iter 3. `parse_meeting_info_xml` + `parse_corrections_xml` audit
-- 30 회사 spot — 회의 정보 (datetime/location/term) + 정정공시 detect
+#### iter 2. KOSPI 30-60 + KOSDAQ 0-30 batch
+- 추가 60 회사 (총 90 회사) — 90 + 30 = 약 120 calls 분산
+- iter 1과 stop hook gap → DART rolling 자연 reset
 
-#### iter 4. `parse_aoi_xml` audit
-- 30 회사 spot — 정관변경 변경전/후 추출률
-- aoi_change scope에 통합된 retirement raw 정확도 spot
-- 정관 안에 묶인 비-정관 안건 (퇴직금/보수) detect 정확도
+#### iter 3. 결과 분석 + 각 parser G1 측정
+- 90 회사 통합 G1 — 7 parser 동시 측정
+- fail case archive
+- parse_personnel_xml: 89% data limit 재확인 (재시도 X)
 
-#### iter 5. `parse_personnel_xml` 재검증
-- 이전 7 iter ralph 후 89% (데이터 한계). 현재 v2 production에서 동일 수준 유지 확인
-- 데이터 한계 archive 정직 기록 유지
+### Phase 2 — Tier B v1 dead 결정 (iter 4-5, **DART 호출 0**)
 
-#### iter 6. `parse_compensation_xml` audit
-- 30 회사 spot — items + summary 채움 (utilization_rate / increase_rate / total_amount)
-- 이사/감사 분리 정확도 (precision ralph 검증 결과 활용)
+#### iter 4. v1 dead parser 사용처 재확인 (정적 grep — DART X)
+- `parse_treasury_share_xml` / `parse_capital_reserve_xml` 잔여 사용처 grep
+- v2 services 어디에도 안 쓰면 archive 결정
+- v1 tools/shareholder.py에서만 쓰이면 v1 dead로 분류
 
-#### iter 7. `parse_provisional_financial_statement` audit
-- 260505 1번 작업으로 신규 — 30 회사 spot 검증
-- 4 quadrant 추출률 (consolidated/separate × balance/income)
-- 단위 / 기간 라벨 / sub-column (current_sub/prior_sub) 패턴 정확도
-- extract_metrics flat krw 정확도
+#### iter 5. `parse_financials_xml` parser.py 본체 archive (정적 — DART X)
+- services로 이미 이동됨 — parser.py 본체 + 의존 helper들 archive
+- v1 tools/shareholder.py import 정리
 
-### Phase 2 — Tier B v1 dead 결정 (iter 8-9)
+### Phase 3 — scope reorg 발견 (iter 6-12, 대부분 정적 분석 + 소량 spot)
 
-#### iter 8. v1 dead parser 사용처 재확인 + archive
-- `parse_treasury_share_xml` / `parse_capital_reserve_xml` 잔여 사용처 spot
-- v2 services 어디에도 안 쓰면 archive
-- v1 tools/shareholder.py에서만 쓰이면 v1 dead로 분류 (production X)
+대부분 코드 정적 분석 (DART X). 필요한 경우만 5 회사 spot (각 ~15 calls).
 
-#### iter 9. `parse_financials_xml` parser.py 본체 archive
-- services/provisional_financial_statement.py로 이미 이동됨
-- v1 tools/shareholder.py가 import하는데 v1 dead → import 정리 또는 그대로
-
-### Phase 3 — scope reorg 발견 (iter 10-15)
-
-#### iter 10. dividend tool scope 검토
-- summary / detail / history 3 scope 차이 확인
+#### iter 6. dividend tool scope 검토 (정적 + 5 회사 spot if needed)
+- summary / detail / history 3 scope 차이 — 코드 정적 비교
 - `detail`이 `summary`와 raw 중복이면 폐지 검토
 
-#### iter 11. ownership_structure scope 검토
-- 5 scope 중 사용 빈도 낮은 것 발견
-- raw 중복 check
+#### iter 7. ownership_structure scope 검토 (정적)
+- 5 scope 중 raw 중복 check (코드 비교)
 
-#### iter 12. financial_metrics scope 검토
+#### iter 8. financial_metrics scope 검토 (정적 + 5 회사 spot if needed)
 - 6 scope (summary / yearly / quarterly / yoy / qoq / audit_opinion) — yearly와 yoy raw 중복 여부
 
-#### iter 13. proxy_contest scope 검토
-- 6 scope 중 summary 통합 가능한 것 (사용자 빈도)
+#### iter 9. proxy_contest scope 검토 (정적)
+- 6 scope 중 summary 통합 가능한 것 — 코드 비교
 
-#### iter 14. treasury_share scope 검토
+#### iter 10. treasury_share scope 검토 (정적)
 - 2 scope (summary / annual) — 이미 단순화. 추가 변경 X 가능성 높음
 
-#### iter 15. corp_gov_report / value_up / 기타 scope 빠른 spot
+#### iter 11. corp_gov_report / value_up scope 빠른 정적 분석
 
-### Phase 4 — fix + 검증 (iter 16-19)
+#### iter 12. layer 정합 검증 (G4) — 정적 분석
+- 모든 data tool 파서가 decision logic 포함하지 않는지 grep + review
+- action tool 사용 파서가 data helper + 별도 decision layer로 분리되어 있는지 확인
 
-#### iter 16-18. 발견된 fix 적용 (parser 강화 / scope 폐지 또는 신설)
+### Phase 4 — fix + 검증 (iter 13-18)
 
-#### iter 19. 회귀 spot — 변경된 모든 부분 재검증
+#### iter 13-16. 발견된 fix 적용 (parser 강화 / scope 폐지 또는 신설)
+- 대부분 코드 변경 + smoke test (5 회사 spot, ~15 calls)
 
-### Phase 5 — 문서화 + promise (iter 20)
+#### iter 17-18. 회귀 spot (1-2 batch — 30 회사씩)
+- 변경된 모든 부분 재검증
+- 각 batch ~90 calls
 
-#### iter 20. wiki 정리 (decisions / log / tools 페이지 update) + promise 발행
+### Phase 5 — 문서화 + promise (iter 19-20)
+
+#### iter 19-20. wiki 정리 (decisions / log / tools 페이지 update) + promise 발행 (DART X)
+
+---
+
+## 총 DART 호출 추정
+
+| Phase | iter | DART calls 추정 |
+|---|---|---|
+| Phase 1 (parser audit) | 1-3 | ~270 calls (90 회사 × 3) |
+| Phase 2 (v1 dead 정적) | 4-5 | 0 |
+| Phase 3 (scope reorg) | 6-12 | ~75 calls (5 회사 × ~3 × 5 spot iter) |
+| Phase 4 (fix + 회귀) | 13-18 | ~270 calls (회귀 90 회사) |
+| Phase 5 (문서화) | 19-20 | 0 |
+| **총합** | 20 iter | **~615 calls** |
+
+→ **20 iter 누적 ~615 calls**, 분산 시간 (수 시간 ~ 하루) 고려하면 분당 cap 900 미달 ✓✓.
 
 ---
 
@@ -212,12 +220,44 @@ KOSPI 200 + KOSDAQ 50 (light — 30 회사 batch + spot)에서 각 Tier A 파서
 - KOSDAQ universe 확장
 - proxy_advise (action tool) decision logic 변경
 
+## Rate limit 설계 (DART 분당 1000회 hard rule)
+
+**design 핵심**: parser audit은 같은 AGM notice doc에서 여러 parser 호출 가능 → **1 회사당 1 doc fetch + N parser** (in-memory). 호출 수 폭증 X.
+
+### Per-iter budget
+- batch: 최대 30 회사 / concurrency 2 / 회사당 ~3 DART call (corp_code → search_filings → get_document)
+- 30 회사 × 3 calls = **~90 calls/batch**. concurrency 2면 ~6-12분 분산.
+- spot iter: 5-10 회사 = ~30 calls. 매우 안전.
+- **단일 iter 최대 90 calls** ≪ cap 900/min ✓
+
+### Master spot script (Tier A 파서 통합 audit)
+iter 1-7을 7 batch (= 7 × 90 calls)로 돌리는 대신, **1 master batch로 통합**:
+- 30 회사 spot 1회 → 각 회사의 AGM notice doc 1회 fetch
+- 같은 html을 7 parser (`parse_agenda_xml` / `parse_agenda_details_xml` / `parse_meeting_info_xml` / `parse_personnel_xml` / `parse_aoi_xml` / `parse_compensation_xml` / `parse_provisional_financial_statement` / `parse_corrections_xml` / `parse_retirement_pay_xml`)에 모두 호출
+- 결과 dict로 모은 다음 G1 metrics 일괄 계산
+
+**호출 수**: 30 회사 × 3 calls = **90 calls** (parser 추가는 in-memory, DART 호출 X). iter 1 → 7 통합 가능.
+
+### Cross-iter 안전
+- 각 iter는 stop hook gap (수 분 ~ 수십 분)으로 분리 — DART rolling window 자연 reset
+- 누적 영향 X (process 분리)
+
+### Sequential batch 원칙
+- 다중 batch chain 시 30s sleep 명시
+- `client.py`의 rolling cap 900 hard guard 자동 throttle 신뢰
+
+### 위험: 동시 다중 ralph
+- 다른 ralph 또는 사용자 호출과 **동시에 실행 시 cap 초과 위험**
+- mitigation: 이 ralph 단독 실행 (다른 ralph 동시 시작 금지)
+- 실수 시 client.py의 rolling cap 900이 hard throttle (block 회피)
+
 ## 가설 / 위험
 
 - **위험 1 (light 제약)**: 20 iter / 작은 batch — 깊은 audit 어려움. 정직하게 spot 위주 + 발견된 issue archive 기록.
 - **위험 2 (parse_personnel data limit)**: 이미 89%로 확정된 데이터 한계. 재시도 X — 정직 인정.
 - **위험 3 (scope 폐지 후 caller 영향)**: 변경 시 회귀 spot 필수.
 - **위험 4 (parser.py 본체 archive)**: v1 tools/shareholder.py import 깨짐. v1 dead라 무방. 단 import 시점 fail 위험 회피 위해 alias 또는 parser.py 잔존 결정 필요.
+- **위험 5 (rate limit)**: 위 design 따라 단일 iter ≤90 calls. 동시 다중 ralph 금지. client.py rolling cap 900 hard throttle 신뢰.
 
 ## archive 폴더
 
