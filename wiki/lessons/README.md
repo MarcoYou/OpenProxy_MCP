@@ -25,3 +25,4 @@ updated: 2026-05-05
 6. [[decision-vs-raw-separation]] — decision logic은 tool 안에서, raw expose는 외부 tool로
 7. [[enrichment-as-infrastructure]] — facts/risk/citation/근거공고 = 검증 가능한 응답의 핵심
 8. [[distribution-calibrated-thresholds]] — classification cutoff은 prior 직관이 아니라 audit 표본 분포 본 후 정함
+9. [[decision-tree-vs-matrix]] — 안건 결정 2가지 방식 (매트릭스 vs 트리), 안건 성격이 방식 결정
