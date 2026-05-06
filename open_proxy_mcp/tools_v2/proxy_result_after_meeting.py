@@ -100,15 +100,12 @@ def register_tools(mcp):
         follow_up_days: int = 30,
         format: str = "md",
     ) -> str:
-        """desc: 주총 **소집 후** 결과 보고 (의도적 단순). **default scope="results" 1회 호출만으로 안건별 가결/부결/찬반율 + 우리 행사 vs 결과 cross-match 모두 제공**.
-        when: 주총 종료 후. 결과 보고. 사전 결정은 proxy_advise_before_meeting (별도).
-        rule: 사후엔 단순 — 다각도 분석은 사전 proxy_advise에서 처리. 결과 + 우리 행사 비교만.
-        scope (사용 가이드):
-          - **results (default)**: 안건별 가결/부결/찬반율 + 우리 행사 cross-match. 4 upstream. 일반 5-15s.
-          - brief: 분기 의결권 보고서 통합 render (옛 vote_brief 흡수). 7 upstream. 15-30s.
-          - all: results + brief 모두. timeout 위험 가능 (Claude.ai 60s).
-        meeting_type: annual (default 정기) / extraordinary (임시) / auto (본문 자동 detect).
-        ref: shareholder_meeting (results) / proxy_contest / asset_managers/records, proxy_advise_before_meeting (사전)
+        """desc: 주총 **소집 후** 결과 보고. 1회 호출로 안건별 가결/부결/찬반율 + 우리 행사 cross-match.
+        when: 주총 종료 후. 사전 결정은 `proxy_advise_before_meeting`.
+        rule: 사후 단순 — 다각도 분석은 사전 단계. 결과 + 우리 행사 비교만.
+        scope: `results`(default) 안건별 결과+cross-match (4 upstream, 5-15s) / `brief` 분기 의결권 보고서 (7 upstream, 15-30s) / `all` 둘 다 (timeout 위험)
+        meeting_type: `annual`(default) / `extraordinary` / `auto`
+        ref: shareholder_meeting_notice, shareholder_meeting_results, proxy_contest, proxy_advise_before_meeting
         """
         payload = await build_proxy_result_payload(
             company,
