@@ -159,7 +159,7 @@ result: 정기/임시/edge case sanity 통과, 18→17 tool regression 0
 | k_legacy (한국투자) | 12 | 4 | 4 | **100%** |
 | m_legacy (M레거시) | 12 | 5 | 4 | **80%** |
 | s_legacy (삼성) | 12 | 5 | 5 | **100%** |
-| sa_active (삼성액티브) | 12 | 5 | 5 | **100%** |
+| sa_legacy (삼성액티브) | 12 | 5 | 5 | **100%** |
 | t_activist (T행동주의) | 12 | 5 | 5 | **100%** |
 | b_foreign (B외국계) | 12 | 6 | 6 | **100%** |
 | a_activist (A행동주의) | 0 | — | — | 별도 (A5 — KB금융지주 alias) |
