@@ -6,9 +6,9 @@ related:
   - wiki/ralph/260510_0823_ralph_agenda-hierarchy-body-fallback.md
   - wiki/lessons/law-layer-body-260510.md
   - wiki/architecture/audits/data/260510_agenda_hierarchy/
-related_decisions: [260508_0700_decision_law-layer-precision, 260510_0900_decision_d-pattern-body-fallback]
+related_decisions: [260508_0700_decision_law-layer-precision, 260510_0900_decision_d-pattern-body-fallback, 260510_1015_decision_subagenda-mapping]
 related_ralph: [260510_0823_ralph_agenda-hierarchy-body-fallback]
-related_audits: [260510_agenda_hierarchy/iter1_findings, 260510_agenda_hierarchy/iter2_findings, 260510_agenda_hierarchy/iter4_findings, 260510_agenda_hierarchy/iter5_kakaogames_spot]
+related_audits: [architecture/audits/data/260510_agenda_hierarchy/iter1_findings, architecture/audits/data/260510_agenda_hierarchy/iter2_findings, architecture/audits/data/260510_agenda_hierarchy/iter4_findings, architecture/audits/data/260510_agenda_hierarchy/iter5_kakaogames_spot]
 ---
 
 # Ralph 7 — 호수 hierarchy 추출 + D 패턴 body fallback 회고
