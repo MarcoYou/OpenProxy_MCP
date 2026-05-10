@@ -8,7 +8,7 @@ related:
   - wiki/architecture/audits/data/260510_agenda_hierarchy/
 related_decisions: [260508_0700_decision_law-layer-precision, 260510_0900_decision_d-pattern-body-fallback]
 related_ralph: [260510_0823_ralph_agenda-hierarchy-body-fallback]
-related_audits: [260510_agenda_hierarchy/iter1_findings, 260510_agenda_hierarchy/iter2_findings, 260510_agenda_hierarchy/iter4_findings]
+related_audits: [260510_agenda_hierarchy/iter1_findings, 260510_agenda_hierarchy/iter2_findings, 260510_agenda_hierarchy/iter4_findings, 260510_agenda_hierarchy/iter5_kakaogames_spot]
 ---
 
 # Ralph 7 — 호수 hierarchy 추출 + D 패턴 body fallback 회고
@@ -122,9 +122,9 @@ sub-agenda 있지만 sub title 일반 표현 — D 패턴 fallback 진입 X. 해
 
 ## 다음 ralph 후보
 
-1. 카카오게임즈 같은 sub 일반 표현 회사 처리 architect
+1. **카카오게임즈 같은 sub 일반 표현 회사 처리** — sub→amendment 1:1 매핑 logic. spot 검증 결과 별도 architect 필요 (label/reason 키워드 fuzzy 매칭 + generic title 처리). 상세: `iter5_kakaogames_spot.md`
 2. A2 시행 후 자연 검증 (2026-07-23 / 09-10)
-3. body_pattern 추가 활용 — 다른 룰 (A1-2 / A1-8 / B1 등)
+3. body_pattern 추가 활용 — 다른 룰 (A1-2 / A1-8 / B1 등). iter 4 결과 A1-8 1건 활성 — KOSDAQ 광범위 추가 시 hits 더 catch 가능
 
 ## archive
 
