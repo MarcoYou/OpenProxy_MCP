@@ -8,7 +8,7 @@ related:
   - wiki/architecture/audits/data/260510_agenda_hierarchy/
 related_decisions: [260508_0700_decision_law-layer-precision, 260510_0900_decision_d-pattern-body-fallback]
 related_ralph: [260510_0823_ralph_agenda-hierarchy-body-fallback]
-related_audits: [260510_agenda_hierarchy/iter1_findings, 260510_agenda_hierarchy/iter2_findings]
+related_audits: [260510_agenda_hierarchy/iter1_findings, 260510_agenda_hierarchy/iter2_findings, 260510_agenda_hierarchy/iter4_findings]
 ---
 
 # Ralph 7 — 호수 hierarchy 추출 + D 패턴 body fallback 회고
@@ -84,7 +84,20 @@ raw "상법 제542조의14, 제542조의15" 인용 catch (메리츠금융지주)
 | LG화학 | sub 명확 | ✅ regression 0 | (children > 0이라 D 진입 X) |
 
 ### 510 회사 spot 회귀
-TBD (iter 4 진행 중)
+
+| universe | n | 기존 t | 신규 t | Δt | 회귀 | D진입 | body | body 회사 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| KOSPI200 | 199 | 247 | 267 | +20 | 0 | 49 | 28 | 27 |
+| KOSDAQ150 | 150 | 18 | 19 | +1 | 0 | 91 | 22 | 22 |
+| KOSDAQ151-300 | 150 | 12 | 12 | 0 | 0 | 74 | 18 | 18 |
+| DISPUTE | 10 | 16 | 16 | 0 | 0 | 2 | 2 | 2 |
+| **TOTAL** | **509** | **293** | **314** | +21 | **0** | **216** | **70** | **69** |
+
+✅ **회귀 0** (510/510) — 회사별 (title, rule_id) set diff 검증
+✅ body fallback 신규 catch 70건 (13.5% 회사 추가 catch)
+✅ **A1-8 (자사주 의무소각) 첫 활성** — Ralph 6 lesson "미사용 룰" 중 첫 body catch
+✅ B2 layer body fallback 작동 (B2-1 2건)
+✅ title 신규 catch 21건은 모두 A1-1 (Ralph 6 "변경" 키워드 효과 — false positive 0)
 
 ## 핵심 교훈
 
