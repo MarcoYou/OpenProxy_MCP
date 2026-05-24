@@ -15,7 +15,7 @@ updated: 2026-05-24
 - **Trade-off**: 무엇을 잃었나
 - **Takeaway**: 다음에 반복할 원칙
 
-## 목록 (2026-05-24 기준)
+## 목록 (2026-05-25 기준)
 
 1. [[acode-semantic-markers]] — DART 본문 ACODE 발견 → text regex 한계 돌파, 99% 안정성
 2. [[scope-simplification]] — tool 안 specialized scope 폐지 → 사용자 라우팅 단순화
@@ -27,3 +27,4 @@ updated: 2026-05-24
 8. [[distribution-calibrated-thresholds]] — classification cutoff은 prior 직관이 아니라 audit 표본 분포 본 후 정함
 9. [[decision-tree-vs-matrix]] — 안건 결정 2가지 방식 (매트릭스 vs 트리), 안건 성격이 방식 결정
 10. [[perf-timing-260524]] — stage timing 먼저, 의미 보존 범위에서만 latency 개선
+11. [[agenda-relation-parser-260525]] — agenda relation은 결론이 아니라 자동 판단을 멈추는 guardrail, KOSPI300 parser regression 0 확인
