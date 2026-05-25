@@ -41,6 +41,8 @@ related:
 
 의결권 판단 layer에서는 파싱된 relation을 결론으로 쓰지 말고, 자동 FOR/AGAINST를 멈추는 guardrail로 쓰는 것이 더 안전하다.
 
+`proxy_advise_before_meeting`의 consistency는 "모든 안건을 법령 layer에 매핑"하는 것이 아니라 "파싱된 안건에 같은 schema와 같은 판단 순서를 적용"하는 것이다. 이 차이를 문서와 사용자 설명에서 계속 분리해야 한다.
+
 ## 관련
 
 - [[260525_0200_audit_agenda-relation-kospi300]]
